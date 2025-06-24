@@ -29,6 +29,9 @@ function RegisterPage() {
   const [secondarySearch, setSecondarySearch] = useState(""); // 2차 검색
   const [isEditMode, setIsEditMode] = useState(false); // 수정 모드 여부
   const [editTargetAvl, setEditTargetAvl] = useState(""); // 수정할 차량의 AVL
+  // 수정 모달을 위한
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editVehicleData, setEditVehicleData] = useState(null);
 
   useEffect(() => {
     axios
@@ -114,19 +117,42 @@ function RegisterPage() {
     setIsEditMode(false);
   };
 
+  // const handleEdit = (vehicle) => {
+  //   setInputs({
+  //     시도: vehicle.시도,
+  //     소방서: vehicle.소방서,
+  //     차종: vehicle.차종,
+  //     호출명: vehicle.호출명,
+  //     용량: vehicle.용량,
+  //     인원: vehicle.인원,
+  //     AVL: vehicle.AVL,
+  //     PSLTE: vehicle.PSLTE,
+  //   });
+  //   setEditTargetAvl(vehicle.AVL);
+  //   setIsEditMode(true); // 수정 모드 ON
+  // };
+
   const handleEdit = (vehicle) => {
-    setInputs({
-      시도: vehicle.시도,
-      소방서: vehicle.소방서,
-      차종: vehicle.차종,
-      호출명: vehicle.호출명,
-      용량: vehicle.용량,
-      인원: vehicle.인원,
-      AVL: vehicle.AVL,
-      PSLTE: vehicle.PSLTE,
-    });
-    setEditTargetAvl(vehicle.AVL);
-    setIsEditMode(true); // 수정 모드 ON
+    setEditVehicleData(vehicle);
+    setEditModalVisible(true);
+  };
+
+  const handleEditSave = (updatedVehicle) => {
+    axios
+      .put(`${BASE_URL}/${updatedVehicle.AVL}`, updatedVehicle)
+      .then(() => {
+        setVehicles((prev) =>
+          prev.map((v) =>
+            v.AVL === updatedVehicle.AVL ? { ...updatedVehicle } : v
+          )
+        );
+        alert("✅ 수정 완료!");
+        setEditModalVisible(false);
+        setEditVehicleData(null);
+      })
+      .catch((err) => {
+        console.error("수정 실패:", err);
+      });
   };
 
   const handleStatusChange = (avl, newStatus) => {
@@ -241,175 +267,252 @@ function RegisterPage() {
   });
 
   return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold mb-6">📋 동원소방력 등록</h1>
+    <>
+      {/* ✅ 수정 모달 */}
+      <EditModal
+        visible={editModalVisible}
+        vehicle={editVehicleData}
+        onClose={() => setEditModalVisible(false)}
+        onSave={handleEditSave}
+      />
 
-      <form onSubmit={handleSubmit} className="flex flex-wrap gap-2 mb-4">
+      {/* 기존 페이지 내용 */}
+      <div className="p-8">
+        <h1 className="text-2xl font-bold mb-6">📋 동원소방력 등록</h1>
+
+        <form onSubmit={handleSubmit} className="flex flex-wrap gap-2 mb-4">
+          {["시도", "소방서", "차종", "호출명", "용량", "인원", "PSLTE"].map(
+            (field) => (
+              <input
+                key={field}
+                name={field}
+                placeholder={field === "PSLTE" ? "PS-LTE 번호" : field}
+                value={inputs[field]}
+                onChange={handleChange}
+                className="border p-2 w-40"
+                maxLength={field === "PSLTE" ? 13 : undefined}
+              />
+            )
+          )}
+
+          {/* 🔒 AVL 필드: 수정 모드일 때 비활성화 + 안내문구 추가 */}
+          <div className="flex flex-col">
+            <input
+              name="AVL"
+              placeholder="AVL단말기번호"
+              value={inputs["AVL"]}
+              onChange={handleChange}
+              disabled={isEditMode}
+              className={`border p-2 w-40 ${
+                isEditMode ? "bg-gray-200 text-gray-600 cursor-not-allowed" : ""
+              }`}
+              maxLength={13}
+              title={isEditMode ? "수정할 수 없습니다" : ""}
+            />
+            {isEditMode && (
+              <small className="text-gray-500 mt-1">
+                고유 식별번호(AVL)는 수정할 수 없습니다. <br />
+                변경 시 삭제 후 재등록 해주세요.
+              </small>
+            )}
+          </div>
+
+          <button
+            type="submit"
+            className={`${
+              isEditMode ? "bg-green-600" : "bg-blue-500"
+            } text-white px-4 py-2 rounded`}
+          >
+            {isEditMode ? "수정 완료" : "등록"}
+          </button>
+
+          {isEditMode && (
+            <button
+              type="button"
+              onClick={resetForm}
+              className="bg-red-500 text-white px-4 py-2 rounded"
+            >
+              취소
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => document.getElementById("excelInput").click()}
+            className="bg-gray-600 text-white px-4 py-2 rounded"
+          >
+            📂 엑셀 업로드
+          </button>
+          <input
+            id="excelInput"
+            type="file"
+            accept=".xlsx, .xls, .csv"
+            onChange={handleExcelUpload}
+            className="hidden"
+          />
+        </form>
+
+        <div className="mb-6 space-y-2">
+          <input
+            type="text"
+            placeholder="1차 검색"
+            value={primarySearch}
+            onChange={(e) => setPrimarySearch(e.target.value)}
+            className="border p-2 w-60 mr-2"
+          />
+          <input
+            type="text"
+            placeholder="2차 검색"
+            value={secondarySearch}
+            onChange={(e) => setSecondarySearch(e.target.value)}
+            className="border p-2 w-60"
+          />
+        </div>
+
+        <table className="w-full table-auto border-collapse">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="border px-2 py-1">연번</th>
+              <th className="border px-2 py-1">시도</th>
+              <th className="border px-2 py-1">소방서</th>
+              <th className="border px-2 py-1">차종</th>
+              <th className="border px-2 py-1">호출명</th>
+              <th className="border px-2 py-1">용량</th>
+              <th className="border px-2 py-1">인원</th>
+              <th className="border px-2 py-1">AVL</th>
+              <th className="border px-2 py-1">PSLTE</th>
+              <th className="border px-2 py-1">상태</th>
+              <th className="border px-2 py-1">자원집결지</th>
+              <th className="border px-2 py-1">작업</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredVehicles.map((v, index) => (
+              <tr key={v.AVL}>
+                <td className="border px-2 py-1 text-center">{index + 1}</td>
+                <td className="border px-2 py-1 text-center">{v.시도}</td>
+                <td className="border px-2 py-1 text-center">{v.소방서}</td>
+                <td className="border px-2 py-1 text-center">{v.차종}</td>
+                <td className="border px-2 py-1 text-center">{v.호출명}</td>
+                <td className="border px-2 py-1 text-center">{v.용량}</td>
+                <td className="border px-2 py-1 text-center">{v.인원}</td>
+                <td className="border px-2 py-1 text-center">{v.AVL}</td>
+                <td className="border px-2 py-1 text-center">{v.PSLTE}</td>
+                <td className="border px-2 py-1 text-center">{v.status}</td>
+                <td
+                  className="border px-2 py-1 text-center cursor-pointer"
+                  onClick={() => handleJipgyeolToggle(v.AVL)}
+                >
+                  {v.집결}
+                </td>
+                <td className="border px-2 py-1 text-center space-x-1">
+                  <button
+                    onClick={() => handleStatusChange(v.AVL, "도착")}
+                    className="bg-green-500 text-white px-2 py-1 rounded"
+                  >
+                    도착
+                  </button>
+                  <button
+                    onClick={() => handleStatusChange(v.AVL, "철수")}
+                    className="bg-red-500 text-white px-2 py-1 rounded"
+                  >
+                    철수
+                  </button>
+                  <button
+                    onClick={() =>
+                      alert(`[${v.호출명}] 차량에 문자 전송됨 (모의)`)
+                    }
+                    className="bg-yellow-500 text-white px-2 py-1 rounded"
+                  >
+                    문자
+                  </button>
+                  <button
+                    onClick={() => handleEdit(v)}
+                    className="bg-blue-400 text-white px-2 py-1 rounded"
+                  >
+                    수정
+                  </button>
+                  <button
+                    onClick={() => handleDelete(v.AVL)}
+                    className="bg-gray-500 text-white px-2 py-1 rounded"
+                  >
+                    삭제
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+// 👇 이 위치에 붙여 넣으세요
+function EditModal({ visible, vehicle, onClose, onSave }) {
+  const [editInputs, setEditInputs] = useState(vehicle || {});
+
+  useEffect(() => {
+    setEditInputs(vehicle || {});
+  }, [vehicle]);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setEditInputs((prev) => ({
+      ...prev,
+      [name]: name === "PSLTE" ? formatPhoneNumber(value) : value,
+    }));
+    if (name === "인원") {
+      const onlyNumbers = value.replace(/\D/g, "");
+      setEditInputs((prev) => ({ ...prev, 인원: onlyNumbers }));
+    }
+  };
+
+  if (!visible) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/30 flex justify-center items-center z-50">
+      <div className="bg-white p-6 rounded-lg shadow w-[400px] relative">
+        <h2 className="text-xl font-semibold mb-4">🚨 차량 정보 수정</h2>
+
         {["시도", "소방서", "차종", "호출명", "용량", "인원", "PSLTE"].map(
           (field) => (
             <input
               key={field}
               name={field}
-              placeholder={field === "PSLTE" ? "PS-LTE 번호" : field}
-              value={inputs[field]}
+              placeholder={field}
+              value={editInputs[field] || ""}
               onChange={handleChange}
-              className="border p-2 w-40"
-              maxLength={field === "PSLTE" ? 13 : undefined}
+              className="border p-2 w-full mb-2"
             />
           )
         )}
 
-        {/* 🔒 AVL 필드: 수정 모드일 때 비활성화 + 안내문구 추가 */}
-        <div className="flex flex-col">
+        <div className="mb-2">
+          <label className="text-sm text-gray-600">AVL (수정 불가)</label>
           <input
             name="AVL"
-            placeholder="AVL단말기번호"
-            value={inputs["AVL"]}
-            onChange={handleChange}
-            disabled={isEditMode}
-            className={`border p-2 w-40 ${
-              isEditMode ? "bg-gray-200 text-gray-600 cursor-not-allowed" : ""
-            }`}
-            maxLength={13}
-            title={isEditMode ? "수정할 수 없습니다" : ""}
+            value={editInputs.AVL || ""}
+            disabled
+            className="border p-2 w-full bg-gray-100 text-gray-500"
           />
-          {isEditMode && (
-            <small className="text-gray-500 mt-1">
-              고유 식별번호(AVL)는 수정할 수 없습니다. <br />
-              변경 시 삭제 후 재등록 해주세요.
-            </small>
-          )}
         </div>
 
-        {/* 등록 / 수정 버튼 */}
-        <button
-          type="submit"
-          className={`${
-            isEditMode ? "bg-green-600" : "bg-blue-500"
-          } text-white px-4 py-2 rounded`}
-        >
-          {isEditMode ? "수정 완료" : "등록"}
-        </button>
-
-        {/* 수정 중 취소 버튼 */}
-        {isEditMode && (
+        <div className="flex justify-end gap-2 mt-4">
           <button
-            type="button"
-            onClick={resetForm}
-            className="bg-red-500 text-white px-4 py-2 rounded"
+            onClick={() => onSave(editInputs)}
+            className="bg-green-600 text-white px-4 py-2 rounded"
+          >
+            수정 완료
+          </button>
+          <button
+            onClick={onClose}
+            className="bg-gray-500 text-white px-4 py-2 rounded"
           >
             취소
           </button>
-        )}
-
-        {/* 엑셀 업로드 */}
-        <button
-          type="button"
-          onClick={() => document.getElementById("excelInput").click()}
-          className="bg-gray-600 text-white px-4 py-2 rounded"
-        >
-          📂 엑셀 업로드
-        </button>
-        <input
-          id="excelInput"
-          type="file"
-          accept=".xlsx, .xls, .csv"
-          onChange={handleExcelUpload}
-          className="hidden"
-        />
-      </form>
-
-      <div className="mb-6 space-y-2">
-        <input
-          type="text"
-          placeholder="1차 검색"
-          value={primarySearch}
-          onChange={(e) => setPrimarySearch(e.target.value)}
-          className="border p-2 w-60 mr-2"
-        />
-        <input
-          type="text"
-          placeholder="2차 검색"
-          value={secondarySearch}
-          onChange={(e) => setSecondarySearch(e.target.value)}
-          className="border p-2 w-60"
-        />
+        </div>
       </div>
-
-      <table className="w-full table-auto border-collapse">
-        <thead>
-          <tr className="bg-gray-100">
-            <th className="border px-2 py-1">연번</th>
-            <th className="border px-2 py-1">시도</th>
-            <th className="border px-2 py-1">소방서</th>
-            <th className="border px-2 py-1">차종</th>
-            <th className="border px-2 py-1">호출명</th>
-            <th className="border px-2 py-1">용량</th>
-            <th className="border px-2 py-1">인원</th>
-            <th className="border px-2 py-1">AVL</th>
-            <th className="border px-2 py-1">PSLTE</th>
-            <th className="border px-2 py-1">상태</th>
-            <th className="border px-2 py-1">자원집결지</th>
-            <th className="border px-2 py-1">작업</th>
-          </tr>
-        </thead>
-        <tbody>
-          {filteredVehicles.map((v, index) => (
-            <tr key={v.AVL}>
-              <td className="border px-2 py-1 text-center">{index + 1}</td>
-              <td className="border px-2 py-1 text-center">{v.시도}</td>
-              <td className="border px-2 py-1 text-center">{v.소방서}</td>
-              <td className="border px-2 py-1 text-center">{v.차종}</td>
-              <td className="border px-2 py-1 text-center">{v.호출명}</td>
-              <td className="border px-2 py-1 text-center">{v.용량}</td>
-              <td className="border px-2 py-1 text-center">{v.인원}</td>
-              <td className="border px-2 py-1 text-center">{v.AVL}</td>
-              <td className="border px-2 py-1 text-center">{v.PSLTE}</td>
-              <td className="border px-2 py-1 text-center">{v.status}</td>
-              <td
-                className="border px-2 py-1 text-center cursor-pointer"
-                onClick={() => handleJipgyeolToggle(v.AVL)}
-              >
-                {v.집결}
-              </td>
-              <td className="border px-2 py-1 text-center space-x-1">
-                <button
-                  onClick={() => handleStatusChange(v.AVL, "도착")}
-                  className="bg-green-500 text-white px-2 py-1 rounded"
-                >
-                  도착
-                </button>
-                <button
-                  onClick={() => handleStatusChange(v.AVL, "철수")}
-                  className="bg-red-500 text-white px-2 py-1 rounded"
-                >
-                  철수
-                </button>
-                <button
-                  onClick={() =>
-                    alert(`[${v.호출명}] 차량에 문자 전송됨 (모의)`)
-                  }
-                  className="bg-yellow-500 text-white px-2 py-1 rounded"
-                >
-                  문자
-                </button>
-                <button
-                  onClick={() => handleEdit(v)}
-                  className="bg-blue-400 text-white px-2 py-1 rounded"
-                >
-                  수정
-                </button>
-                <button
-                  onClick={() => handleDelete(v.AVL)}
-                  className="bg-gray-500 text-white px-2 py-1 rounded"
-                >
-                  삭제
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </div>
   );
 }
