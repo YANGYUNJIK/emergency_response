@@ -28,7 +28,7 @@ function RegisterPage() {
   const [primarySearch, setPrimarySearch] = useState(""); // 1차 검색
   const [secondarySearch, setSecondarySearch] = useState(""); // 2차 검색
   const [isEditMode, setIsEditMode] = useState(false); // 수정 모드 여부
-  const [editTargetAvl, setEditTargetAvl] = useState(""); // 수정할 차량의 AVL
+  const [editTargetId, setEditTargetId] = useState(""); // 수정할 차량의 AVL
   // 수정 모달을 위한
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editVehicleData, setEditVehicleData] = useState(null);
@@ -56,8 +56,11 @@ function RegisterPage() {
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    if (!inputs.AVL || inputs.AVL.trim() === "") {
-      alert("🚨 AVL 번호를 입력해야 합니다.");
+    if (
+      inputs.AVL &&
+      vehicles.some((v) => v.AVL === formatPhoneNumber(inputs.AVL))
+    ) {
+      alert("❌ 이미 등록된 AVL 번호입니다!");
       return;
     }
 
@@ -71,10 +74,10 @@ function RegisterPage() {
     if (isEditMode) {
       // 🔄 수정 모드
       axios
-        .put(`${BASE_URL}/${editTargetAvl}`, vehicleData)
+        .put(`${BASE_URL}/${editTargetId}`, vehicleData)
         .then(() => {
           setVehicles((prev) =>
-            prev.map((v) => (v.AVL === editTargetAvl ? { ...vehicleData } : v))
+            prev.map((v) => (v.id === editTargetId ? { ...vehicleData } : v))
           );
           alert("🚨 수정 완료되었습니다!");
           resetForm();
@@ -84,7 +87,7 @@ function RegisterPage() {
         });
     } else {
       // 🆕 등록 모드
-      if (vehicles.some((v) => v.AVL === formatPhoneNumber(inputs.AVL))) {
+      if (vehicles.some((v) => v.id === formatPhoneNumber(inputs.AVL))) {
         alert("❌ 이미 등록된 AVL 번호입니다!");
         return;
       }
@@ -113,7 +116,7 @@ function RegisterPage() {
       AVL: "",
       PSLTE: "",
     });
-    setEditTargetAvl("");
+    setEditTargetId("");
     setIsEditMode(false);
   };
 
@@ -139,11 +142,11 @@ function RegisterPage() {
 
   const handleEditSave = (updatedVehicle) => {
     axios
-      .put(`${BASE_URL}/${updatedVehicle.AVL}`, updatedVehicle)
+      .put(`${BASE_URL}/${updatedVehicle.id}`, updatedVehicle)
       .then(() => {
         setVehicles((prev) =>
           prev.map((v) =>
-            v.AVL === updatedVehicle.AVL ? { ...updatedVehicle } : v
+            v.id === updatedVehicle.id ? { ...updatedVehicle } : v
           )
         );
         alert("✅ 수정 완료!");
@@ -155,46 +158,46 @@ function RegisterPage() {
       });
   };
 
-  const handleStatusChange = (avl, newStatus) => {
+  const handleStatusChange = (id, newStatus) => {
     axios
-      .put(`${BASE_URL}/${avl}/status`, JSON.stringify(newStatus), {
+      .put(`${BASE_URL}/${id}/status`, JSON.stringify(newStatus), {
         headers: { "Content-Type": "application/json" },
       })
       .then(() => {
         setVehicles((prev) =>
-          prev.map((v) => (v.AVL === avl ? { ...v, status: newStatus } : v))
+          prev.map((v) => (v.id === id ? { ...v, status: newStatus } : v))
         );
       })
       .catch((err) => console.error("상태 변경 실패:", err));
   };
 
-  const handleDelete = (avl) => {
-    const target = vehicles.find((v) => v.AVL === avl);
+  const handleDelete = (id) => {
+    const target = vehicles.find((v) => v.id === id);
     const confirmDelete = window.confirm(
       `[${target.호출명}] 차량 정보를 삭제하시겠습니까?`
     );
 
     if (confirmDelete) {
       axios
-        .delete(`${BASE_URL}/${avl}`)
+        .delete(`${BASE_URL}/${id}`)
         .then(() => {
-          setVehicles((prev) => prev.filter((v) => v.AVL !== avl));
+          setVehicles((prev) => prev.filter((v) => v.id !== id));
         })
         .catch((err) => console.error("삭제 실패:", err));
     }
   };
 
-  const handleJipgyeolToggle = async (targetAvl) => {
+  const handleJipgyeolToggle = async (targetId) => {
     const updatedList = vehicles.map((v) =>
-      v.AVL === targetAvl ? { ...v, 집결: v.집결 === "O" ? "X" : "O" } : v
+      v.id === targetId ? { ...v, 집결: v.집결 === "O" ? "X" : "O" } : v
     );
     setVehicles(updatedList);
 
-    const updated = updatedList.find((v) => v.AVL === targetAvl);
+    const updated = updatedList.find((v) => v.id === targetId);
 
     try {
       await axios.put(
-        `${BASE_URL}/${targetAvl}/jipgyeol`,
+        `${BASE_URL}/${targetId}/jipgyeol`,
         JSON.stringify(updated.집결),
         {
           headers: { "Content-Type": "application/json" },
@@ -220,7 +223,6 @@ function RegisterPage() {
       const formattedData = jsonData.map((row, index) => {
         const 시도 = row["시도"] || "";
         return {
-          id: vehicles.length + index + 1,
           시도,
           소방서: row["소방서"] || "",
           차종: row["차종"] || "",
@@ -234,13 +236,35 @@ function RegisterPage() {
         };
       });
 
-      formattedData.forEach((vehicle) => {
+      // ✅ 중복 제거 (AVL 또는 PSLTE 중 하나라도 중복되면 제외)
+      const existingAvlSet = new Set(vehicles.map((v) => v.AVL));
+      const existingPslteSet = new Set(vehicles.map((v) => v.PSLTE));
+      const deduplicated = formattedData.filter(
+        (item) =>
+          (!item.AVL || !existingAvlSet.has(item.AVL)) &&
+          (!item.PSLTE || !existingPslteSet.has(item.PSLTE))
+      );
+
+      const duplicateCount = formattedData.length - deduplicated.length;
+
+      if (deduplicated.length === 0) {
+        alert("❌ 중복된 데이터입니다. 등록할 항목이 없습니다.");
+        return;
+      }
+
+      // ✅ DB 저장
+      deduplicated.forEach((vehicle) => {
         axios
           .post(BASE_URL, vehicle)
           .catch((err) => console.error("DB 저장 실패:", err));
       });
 
-      setVehicles((prev) => [...prev, ...formattedData]);
+      setVehicles((prev) => [...prev, ...deduplicated]);
+
+      // ✅ 결과 알림
+      alert(
+        `📂 엑셀 업로드 완료!\n✅ 등록: ${deduplicated.length}개\n❌ 중복 제외: ${duplicateCount}개`
+      );
     };
 
     reader.readAsArrayBuffer(file);
@@ -388,7 +412,7 @@ function RegisterPage() {
           </thead>
           <tbody>
             {filteredVehicles.map((v, index) => (
-              <tr key={v.AVL}>
+              <tr key={v.id || `${v.AVL}-${index}`}>
                 <td className="border px-2 py-1 text-center">{index + 1}</td>
                 <td className="border px-2 py-1 text-center">{v.시도}</td>
                 <td className="border px-2 py-1 text-center">{v.소방서}</td>
@@ -401,19 +425,19 @@ function RegisterPage() {
                 <td className="border px-2 py-1 text-center">{v.status}</td>
                 <td
                   className="border px-2 py-1 text-center cursor-pointer"
-                  onClick={() => handleJipgyeolToggle(v.AVL)}
+                  onClick={() => handleJipgyeolToggle(v.id)}
                 >
                   {v.집결}
                 </td>
                 <td className="border px-2 py-1 text-center space-x-1">
                   <button
-                    onClick={() => handleStatusChange(v.AVL, "도착")}
+                    onClick={() => handleStatusChange(v.id, "도착")}
                     className="bg-green-500 text-white px-2 py-1 rounded"
                   >
                     도착
                   </button>
                   <button
-                    onClick={() => handleStatusChange(v.AVL, "철수")}
+                    onClick={() => handleStatusChange(v.id, "철수")}
                     className="bg-red-500 text-white px-2 py-1 rounded"
                   >
                     철수
@@ -433,7 +457,7 @@ function RegisterPage() {
                     수정
                   </button>
                   <button
-                    onClick={() => handleDelete(v.AVL)}
+                    onClick={() => handleDelete(v.id)}
                     className="bg-gray-500 text-white px-2 py-1 rounded"
                   >
                     삭제
