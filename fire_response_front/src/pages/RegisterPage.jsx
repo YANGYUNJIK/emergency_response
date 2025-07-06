@@ -263,7 +263,7 @@ function RegisterPage() {
       console.error("집결 상태 업데이트 실패", error);
     }
   };
-
+  // here
   const handleExcelUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
