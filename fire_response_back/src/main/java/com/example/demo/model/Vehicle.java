@@ -1,7 +1,6 @@
 package com.example.demo.model;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -10,49 +9,46 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
-// 상단에 import 추가
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-
-
-// 🔹 Lombok을 사용하면 getter/setter 자동 생성됨
 @Getter
 @Setter
 @Entity
-@Table(name = "vehicles") // DB 테이블명
+@Table(name = "vehicles")
 public class Vehicle {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY) // AUTO_INCREMENT
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @JsonProperty("시도")
-    private String 시도;
+    @JsonProperty("province")
+    private String province;
 
-    @JsonProperty("소방서")
-    private String 소방서;
+    @JsonProperty("station")
+    private String station;
 
-    @JsonProperty("차종")
-    private String 차종;
+    @JsonProperty("vehicleType")
+    private String vehicleType;
 
-    @JsonProperty("호출명")
-    private String 호출명;
+    @JsonProperty("callSign")
+    private String callSign;
 
-    @JsonProperty("용량")
-    private String 용량;
+    @JsonProperty("capacity")
+    private String capacity;
 
-    @JsonProperty("인원")
-    private String 인원;
+    @JsonProperty("personnel")
+    private String personnel;
 
-    @JsonProperty("AVL") // JSON에서 "AVL" → 자바의 AVL 필드에 매핑
-    private String AVL;
+    @JsonProperty("AVL")
+    private String avl;
 
     @JsonProperty("PSLTE")
-    private String PSLTE;
+    private String pslte;
 
-    @JsonProperty("집결")
-    private String 집결;
+    @JsonProperty("gathering")
+    private String gathering;
 
     @JsonProperty("status")
     private String status;
+
+    @JsonProperty("confirm")
+    private String confirm;
 }

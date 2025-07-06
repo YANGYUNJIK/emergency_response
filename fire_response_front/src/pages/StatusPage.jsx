@@ -25,8 +25,6 @@ const COLUMNS = [
   "기타",
 ];
 
-const STATUS_LABELS = ["대기", "활동"];
-
 export default function StatusPage() {
   const [mode, setMode] = useState("평상시");
   const [vehicles, setVehicles] = useState([]);
@@ -37,9 +35,11 @@ export default function StatusPage() {
 
   const getFilteredVehicles = () => {
     if (mode === "평상시") {
-      return vehicles.filter((v) => v.시도 === "경북");
+      return vehicles.filter((v) => v.province === "경북");
     } else {
-      return vehicles.filter((v) => v.집결 === "O" || v.시도 !== "경북");
+      return vehicles.filter(
+        (v) => v.gathering === "O" || v.province !== "경북"
+      );
     }
   };
 
@@ -48,19 +48,15 @@ export default function StatusPage() {
     const filtered = getFilteredVehicles();
 
     for (const v of filtered) {
-      const region = v.시도;
-      const status = v.status;
+      const region = v.province || "미지정";
+      const status = v.status || "미지정";
 
       if (!data[region]) {
-        data[region] = {
-          전체: [],
-          대기: [],
-          활동: [],
-        };
+        data[region] = { 전체: [], 대기: [], 활동: [] };
       }
       data[region]["전체"].push(v);
       if (status === "대기") data[region]["대기"].push(v);
-      if (status === "활동") data[region]["활동"].push(v);
+      if (status === "활동" || status === "도착") data[region]["활동"].push(v);
     }
 
     return data;
@@ -72,9 +68,9 @@ export default function StatusPage() {
       counts[col] = 0;
     }
     for (const v of list) {
-      const type = v.차종;
-      const personnel = parseInt(v.인원 || 0);
-      if (type && COLUMNS.includes(type)) {
+      const type = v.vehicleType || "기타";
+      const personnel = parseInt(v.personnel || 0);
+      if (COLUMNS.includes(type)) {
         counts[type] += 1;
       } else {
         counts["기타"] += 1;
@@ -85,6 +81,7 @@ export default function StatusPage() {
   };
 
   const renderRow = (label, list) => {
+    if (!list || list.length === 0) return null;
     const counts = getCounts(list);
     return (
       <tr>
@@ -150,14 +147,18 @@ export default function StatusPage() {
 
           {mode === "재난시" &&
             sortedRegions.map((region) => {
+              const regionData = grouped[region];
+              if (!regionData || !regionData.전체) return null;
+
               if (region === "경북") {
-                if (!grouped["경북"].전체.some((v) => v.집결 === "O"))
-                  return null;
-                const filtered = grouped["경북"].전체.filter(
-                  (v) => v.집결 === "O"
+                const filtered = regionData.전체.filter(
+                  (v) => v.gathering === "O"
                 );
+                if (filtered.length === 0) return null;
                 const standby = filtered.filter((v) => v.status === "대기");
-                const active = filtered.filter((v) => v.status === "활동");
+                const active = filtered.filter(
+                  (v) => v.status === "활동" || v.status === "도착"
+                );
                 return (
                   <React.Fragment key="경북">
                     <tr className="border-t-4 border-black"></tr>
@@ -167,11 +168,10 @@ export default function StatusPage() {
                   </React.Fragment>
                 );
               } else {
-                const regionData = grouped[region];
                 return (
                   <React.Fragment key={region}>
                     <tr className="border-t-4 border-black"></tr>
-                    {renderRow(`${region}`, regionData.전체)}
+                    {renderRow(region, regionData.전체)}
                     {renderRow("대기", regionData.대기)}
                     {renderRow("활동", regionData.활동)}
                   </React.Fragment>

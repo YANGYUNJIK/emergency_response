@@ -14,12 +14,12 @@ function formatPhoneNumber(input) {
 
 function RegisterPage() {
   const [inputs, setInputs] = useState({
-    시도: "",
-    소방서: "",
-    차종: "",
-    호출명: "",
-    용량: "",
-    인원: "",
+    province: "",
+    station: "",
+    vehicleType: "",
+    callSign: "",
+    capacity: "",
+    personnel: "",
     AVL: "",
     PSLTE: "",
   });
@@ -44,12 +44,11 @@ function RegisterPage() {
     const { name, value } = e.target;
     if (name === "AVL" || name === "PSLTE") {
       setInputs((prev) => ({ ...prev, [name]: formatPhoneNumber(value) }));
+    } else if (name === "personnel") {
+      const onlyNumbers = value.replace(/\D/g, "");
+      setInputs((prev) => ({ ...prev, personnel: onlyNumbers }));
     } else {
       setInputs((prev) => ({ ...prev, [name]: value }));
-    }
-    if (name === "인원") {
-      const onlyNumbers = value.replace(/\D/g, ""); // 숫자만 남기기
-      setInputs((prev) => ({ ...prev, [name]: onlyNumbers }));
     }
   };
 
@@ -64,10 +63,10 @@ function RegisterPage() {
       return;
     }
 
-    const 집결 = inputs.시도 === "경북" ? "X" : "O";
+    const gathering = inputs.province === "경북" ? "X" : "O";
     const vehicleData = {
       ...inputs,
-      집결,
+      gathering,
       status: "대기", // 항상 초기화
     };
 
@@ -77,7 +76,9 @@ function RegisterPage() {
         .put(`${BASE_URL}/${editTargetId}`, vehicleData)
         .then(() => {
           setVehicles((prev) =>
-            prev.map((v) => (v.id === editTargetId ? { ...vehicleData } : v))
+            prev.map((v) =>
+              v.id === editTargetId ? { ...vehicleData, id: editTargetId } : v
+            )
           );
           alert("🚨 수정 완료되었습니다!");
           resetForm();
@@ -87,7 +88,7 @@ function RegisterPage() {
         });
     } else {
       // 🆕 등록 모드
-      if (vehicles.some((v) => v.id === formatPhoneNumber(inputs.AVL))) {
+      if (vehicles.some((v) => v.AVL === formatPhoneNumber(inputs.AVL))) {
         alert("❌ 이미 등록된 AVL 번호입니다!");
         return;
       }
@@ -107,12 +108,12 @@ function RegisterPage() {
 
   const resetForm = () => {
     setInputs({
-      시도: "",
-      소방서: "",
-      차종: "",
-      호출명: "",
-      용량: "",
-      인원: "",
+      province: "",
+      station: "",
+      vehicleType: "",
+      callSign: "",
+      capacity: "",
+      personnel: "",
       AVL: "",
       PSLTE: "",
     });
@@ -120,33 +121,36 @@ function RegisterPage() {
     setIsEditMode(false);
   };
 
-  // const handleEdit = (vehicle) => {
-  //   setInputs({
-  //     시도: vehicle.시도,
-  //     소방서: vehicle.소방서,
-  //     차종: vehicle.차종,
-  //     호출명: vehicle.호출명,
-  //     용량: vehicle.용량,
-  //     인원: vehicle.인원,
-  //     AVL: vehicle.AVL,
-  //     PSLTE: vehicle.PSLTE,
-  //   });
-  //   setEditTargetAvl(vehicle.AVL);
-  //   setIsEditMode(true); // 수정 모드 ON
-  // };
-
   const handleEdit = (vehicle) => {
     setEditVehicleData(vehicle);
     setEditModalVisible(true);
+    setEditTargetId(vehicle.id);
+    setIsEditMode(true);
   };
 
   const handleEditSave = (updatedVehicle) => {
+    const formattedAvl = formatPhoneNumber(updatedVehicle.AVL || "");
+
+    // ✅ AVL이 입력된 경우에만 중복 검사
+    if (
+      formattedAvl &&
+      vehicles.some((v) => v.id !== updatedVehicle.id && v.AVL === formattedAvl)
+    ) {
+      alert("❌ 다른 차량과 중복된 AVL 번호입니다.");
+      return;
+    }
+
     axios
-      .put(`${BASE_URL}/${updatedVehicle.id}`, updatedVehicle)
+      .put(`${BASE_URL}/${updatedVehicle.id}`, {
+        ...updatedVehicle,
+        AVL: formattedAvl,
+      })
       .then(() => {
         setVehicles((prev) =>
           prev.map((v) =>
-            v.id === updatedVehicle.id ? { ...updatedVehicle } : v
+            v.id === updatedVehicle.id
+              ? { ...updatedVehicle, AVL: formattedAvl }
+              : v
           )
         );
         alert("✅ 수정 완료!");
@@ -155,6 +159,58 @@ function RegisterPage() {
       })
       .catch((err) => {
         console.error("수정 실패:", err);
+      });
+  };
+
+  // 일괄 철수 핸들러 예시
+  const handleRetreatAll = () => {
+    const confirmRetreat = window.confirm(
+      "⚠ 정말 전체 차량을 철수 상태로 변경하시겠습니까?"
+    );
+    if (!confirmRetreat) return;
+
+    axios
+      .put(`${BASE_URL}/status/all`, JSON.stringify("철수"), {
+        headers: { "Content-Type": "application/json" },
+      })
+      .then(() => {
+        return axios.get(BASE_URL);
+      })
+      .then((res) => {
+        const validVehicles = res.data.filter(
+          (v) => v && v.id && v.province && v.vehicleType && v.callSign // 최소 유효성 검사
+        );
+        setVehicles(validVehicles);
+      })
+      .catch((err) => {
+        console.error("일괄 철수 실패:", err);
+        alert("❌ 일괄 철수 실패");
+      });
+  };
+
+  // 일괄 철수 핸들러 예시
+  const handleRetreatAll2 = () => {
+    const confirmRetreat = window.confirm(
+      "⚠ 정말 전체 차량을 대기 상태로 변경하시겠습니까?"
+    );
+    if (!confirmRetreat) return;
+
+    axios
+      .put(`${BASE_URL}/status/all`, JSON.stringify("대기"), {
+        headers: { "Content-Type": "application/json" },
+      })
+      .then(() => {
+        return axios.get(BASE_URL);
+      })
+      .then((res) => {
+        const validVehicles = res.data.filter(
+          (v) => v && v.id && v.province && v.vehicleType && v.callSign // 최소 유효성 검사
+        );
+        setVehicles(validVehicles);
+      })
+      .catch((err) => {
+        console.error("일괄 대기 실패:", err);
+        alert("❌ 일괄 대기 실패");
       });
   };
 
@@ -174,7 +230,7 @@ function RegisterPage() {
   const handleDelete = (id) => {
     const target = vehicles.find((v) => v.id === id);
     const confirmDelete = window.confirm(
-      `[${target.호출명}] 차량 정보를 삭제하시겠습니까?`
+      `[${target.callSign}] 차량 정보를 삭제하시겠습니까?`
     );
 
     if (confirmDelete) {
@@ -187,9 +243,11 @@ function RegisterPage() {
     }
   };
 
-  const handleJipgyeolToggle = async (targetId) => {
+  const handleGatheringToggle = async (targetId) => {
     const updatedList = vehicles.map((v) =>
-      v.id === targetId ? { ...v, 집결: v.집결 === "O" ? "X" : "O" } : v
+      v.id === targetId
+        ? { ...v, gathering: v.gathering === "O" ? "X" : "O" }
+        : v
     );
     setVehicles(updatedList);
 
@@ -197,11 +255,9 @@ function RegisterPage() {
 
     try {
       await axios.put(
-        `${BASE_URL}/${targetId}/jipgyeol`,
-        JSON.stringify(updated.집결),
-        {
-          headers: { "Content-Type": "application/json" },
-        }
+        `${BASE_URL}/${targetId}/gathering`,
+        JSON.stringify(updated.gathering),
+        { headers: { "Content-Type": "application/json" } }
       );
     } catch (error) {
       console.error("집결 상태 업데이트 실패", error);
@@ -213,30 +269,30 @@ function RegisterPage() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       const data = new Uint8Array(event.target.result);
       const workbook = XLSX.read(data, { type: "array" });
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-      const formattedData = jsonData.map((row, index) => {
-        const 시도 = row["시도"] || "";
+      const formattedData = jsonData.map((row) => {
+        const province = row["시도"] || "";
         return {
-          시도,
-          소방서: row["소방서"] || "",
-          차종: row["차종"] || "",
-          호출명: row["호출명"] || "",
-          용량: row["용량"] || "",
-          인원: row["인원"] || "",
+          province,
+          station: row["소방서"] || "",
+          vehicleType: row["차종"] || "",
+          callSign: row["호출명"] || "",
+          capacity: row["용량"] || "",
+          personnel: row["인원"] || "",
           AVL: formatPhoneNumber(row["AVL"] || ""),
           PSLTE: formatPhoneNumber(row["PSLTE"] || ""),
-          집결: 시도 === "경북" ? "X" : "O",
+          gathering: province === "경북" ? "X" : "O",
           status: "대기",
         };
       });
 
-      // ✅ 중복 제거 (AVL 또는 PSLTE 중 하나라도 중복되면 제외)
+      // ✅ 중복 제거
       const existingAvlSet = new Set(vehicles.map((v) => v.AVL));
       const existingPslteSet = new Set(vehicles.map((v) => v.PSLTE));
       const deduplicated = formattedData.filter(
@@ -252,19 +308,23 @@ function RegisterPage() {
         return;
       }
 
-      // ✅ DB 저장
-      deduplicated.forEach((vehicle) => {
-        axios
-          .post(BASE_URL, vehicle)
-          .catch((err) => console.error("DB 저장 실패:", err));
-      });
+      try {
+        // ✅ Promise.all로 서버 응답 데이터를 수집
+        const savedVehicles = await Promise.all(
+          deduplicated.map((vehicle) =>
+            axios.post(BASE_URL, vehicle).then((res) => res.data)
+          )
+        );
 
-      setVehicles((prev) => [...prev, ...deduplicated]);
+        setVehicles((prev) => [...prev, ...savedVehicles]);
 
-      // ✅ 결과 알림
-      alert(
-        `📂 엑셀 업로드 완료!\n✅ 등록: ${deduplicated.length}개\n❌ 중복 제외: ${duplicateCount}개`
-      );
+        alert(
+          `📂 엑셀 업로드 완료!\n✅ 등록: ${savedVehicles.length}개\n❌ 중복 제외: ${duplicateCount}개`
+        );
+      } catch (err) {
+        console.error("엑셀 업로드 중 오류:", err);
+        alert("❌ 일부 또는 전체 데이터 등록 실패");
+      }
     };
 
     reader.readAsArrayBuffer(file);
@@ -276,16 +336,16 @@ function RegisterPage() {
     const keyword2 = secondarySearch.toLowerCase();
 
     const matchPrimary =
-      v.시도.toLowerCase().includes(keyword1) ||
-      v.소방서.toLowerCase().includes(keyword1) ||
-      v.차종.toLowerCase().includes(keyword1) ||
-      v.status.toLowerCase().includes(keyword1);
+      (v.province?.toLowerCase() || "").includes(keyword1) ||
+      (v.station?.toLowerCase() || "").includes(keyword1) ||
+      (v.vehicleType?.toLowerCase() || "").includes(keyword1) ||
+      (v.status?.toLowerCase() || "").includes(keyword1);
 
     const matchSecondary =
-      v.시도.toLowerCase().includes(keyword2) ||
-      v.소방서.toLowerCase().includes(keyword2) ||
-      v.status.toLowerCase().includes(keyword2) ||
-      v.차종.toLowerCase().includes(keyword2);
+      (v.province?.toLowerCase() || "").includes(keyword2) ||
+      (v.station?.toLowerCase() || "").includes(keyword2) ||
+      (v.vehicleType?.toLowerCase() || "").includes(keyword2) ||
+      (v.status?.toLowerCase() || "").includes(keyword2);
 
     return matchPrimary && matchSecondary;
   });
@@ -305,41 +365,33 @@ function RegisterPage() {
         <h1 className="text-2xl font-bold mb-6">📋 동원소방력 등록</h1>
 
         <form onSubmit={handleSubmit} className="flex flex-wrap gap-2 mb-4">
-          {["시도", "소방서", "차종", "호출명", "용량", "인원", "PSLTE"].map(
-            (field) => (
-              <input
-                key={field}
-                name={field}
-                placeholder={field === "PSLTE" ? "PS-LTE 번호" : field}
-                value={inputs[field]}
-                onChange={handleChange}
-                className="border p-2 w-40"
-                maxLength={field === "PSLTE" ? 13 : undefined}
-              />
-            )
-          )}
-
-          {/* 🔒 AVL 필드: 수정 모드일 때 비활성화 + 안내문구 추가 */}
-          <div className="flex flex-col">
+          {[
+            "시도",
+            "소방서",
+            "차종",
+            "호출명",
+            "용량",
+            "인원",
+            "AVL",
+            // placeholder AVL 단말기 번호
+            "PSLTE",
+          ].map((field) => (
             <input
-              name="AVL"
-              placeholder="AVL단말기번호"
-              value={inputs["AVL"]}
+              key={field}
+              name={field}
+              placeholder={
+                field === "PSLTE"
+                  ? "PS-LTE 번호"
+                  : field === "AVL"
+                  ? "AVL 단말기 번호"
+                  : field
+              }
+              value={inputs[field]}
               onChange={handleChange}
-              disabled={isEditMode}
-              className={`border p-2 w-40 ${
-                isEditMode ? "bg-gray-200 text-gray-600 cursor-not-allowed" : ""
-              }`}
-              maxLength={13}
-              title={isEditMode ? "수정할 수 없습니다" : ""}
+              className="border p-2 w-40"
+              maxLength={field === "PSLTE" ? 13 : undefined}
             />
-            {isEditMode && (
-              <small className="text-gray-500 mt-1">
-                고유 식별번호(AVL)는 수정할 수 없습니다. <br />
-                변경 시 삭제 후 재등록 해주세요.
-              </small>
-            )}
-          </div>
+          ))}
 
           <button
             type="submit"
@@ -366,6 +418,27 @@ function RegisterPage() {
             className="bg-gray-600 text-white px-4 py-2 rounded"
           >
             📂 엑셀 업로드
+          </button>
+          <button
+            type="button"
+            className="bg-gray-600 text-white px-4 py-2 rounded"
+          >
+            📂 GPS 동의 문자(전체)
+          </button>
+          <button
+            type="button" // ✅ 이걸 꼭 넣어주세요!
+            onClick={handleRetreatAll}
+            className="bg-red-600 text-white px-4 py-2 rounded"
+          >
+            🚨 상황 종료
+          </button>
+
+          <button
+            type="button" // ✅ 이걸 꼭 넣어주세요!
+            onClick={handleRetreatAll2}
+            className="bg-blue-600 text-white px-4 py-2 rounded"
+          >
+            🚨 일괄 대기
           </button>
           <input
             id="excelInput"
@@ -412,24 +485,32 @@ function RegisterPage() {
           </thead>
           <tbody>
             {filteredVehicles.map((v, index) => (
-              <tr key={v.id || `${v.AVL}-${index}`}>
+              <tr key={v.id}>
                 <td className="border px-2 py-1 text-center">{index + 1}</td>
-                <td className="border px-2 py-1 text-center">{v.시도}</td>
-                <td className="border px-2 py-1 text-center">{v.소방서}</td>
-                <td className="border px-2 py-1 text-center">{v.차종}</td>
-                <td className="border px-2 py-1 text-center">{v.호출명}</td>
-                <td className="border px-2 py-1 text-center">{v.용량}</td>
-                <td className="border px-2 py-1 text-center">{v.인원}</td>
+                <td className="border px-2 py-1 text-center">{v.province}</td>
+                <td className="border px-2 py-1 text-center">{v.station}</td>
+                <td className="border px-2 py-1 text-center">
+                  {v.vehicleType}
+                </td>
+                <td className="border px-2 py-1 text-center">{v.callSign}</td>
+                <td className="border px-2 py-1 text-center">{v.capacity}</td>
+                <td className="border px-2 py-1 text-center">{v.personnel}</td>
                 <td className="border px-2 py-1 text-center">{v.AVL}</td>
                 <td className="border px-2 py-1 text-center">{v.PSLTE}</td>
                 <td className="border px-2 py-1 text-center">{v.status}</td>
                 <td
                   className="border px-2 py-1 text-center cursor-pointer"
-                  onClick={() => handleJipgyeolToggle(v.id)}
+                  onClick={() => handleGatheringToggle(v.id)}
                 >
-                  {v.집결}
+                  {v.gathering}
                 </td>
                 <td className="border px-2 py-1 text-center space-x-1">
+                  <button
+                    onClick={() => handleStatusChange(v.id, "대기")}
+                    className="bg-purple-500 text-white px-2 py-1 rounded"
+                  >
+                    대기
+                  </button>
                   <button
                     onClick={() => handleStatusChange(v.id, "도착")}
                     className="bg-green-500 text-white px-2 py-1 rounded"
@@ -443,18 +524,18 @@ function RegisterPage() {
                     철수
                   </button>
                   <button
-                    onClick={() =>
-                      alert(`[${v.호출명}] 차량에 문자 전송됨 (모의)`)
-                    }
-                    className="bg-yellow-500 text-white px-2 py-1 rounded"
-                  >
-                    문자
-                  </button>
-                  <button
                     onClick={() => handleEdit(v)}
                     className="bg-blue-400 text-white px-2 py-1 rounded"
                   >
                     수정
+                  </button>
+                  <button
+                    onClick={() =>
+                      alert(`[${v.callSign}] 차량에 문자 전송됨 (모의)`)
+                    }
+                    className="bg-yellow-500 text-white px-2 py-1 rounded"
+                  >
+                    문자
                   </button>
                   <button
                     onClick={() => handleDelete(v.id)}
@@ -482,13 +563,13 @@ function EditModal({ visible, vehicle, onClose, onSave }) {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setEditInputs((prev) => ({
-      ...prev,
-      [name]: name === "PSLTE" ? formatPhoneNumber(value) : value,
-    }));
-    if (name === "인원") {
+    if (name === "personnel") {
       const onlyNumbers = value.replace(/\D/g, "");
-      setEditInputs((prev) => ({ ...prev, 인원: onlyNumbers }));
+      setEditInputs((prev) => ({ ...prev, personnel: onlyNumbers }));
+    } else if (name === "PSLTE" || name === "AVL") {
+      setEditInputs((prev) => ({ ...prev, [name]: formatPhoneNumber(value) }));
+    } else {
+      setEditInputs((prev) => ({ ...prev, [name]: value }));
     }
   };
 
@@ -499,28 +580,26 @@ function EditModal({ visible, vehicle, onClose, onSave }) {
       <div className="bg-white p-6 rounded-lg shadow w-[400px] relative">
         <h2 className="text-xl font-semibold mb-4">🚨 차량 정보 수정</h2>
 
-        {["시도", "소방서", "차종", "호출명", "용량", "인원", "PSLTE"].map(
-          (field) => (
-            <input
-              key={field}
-              name={field}
-              placeholder={field}
-              value={editInputs[field] || ""}
-              onChange={handleChange}
-              className="border p-2 w-full mb-2"
-            />
-          )
-        )}
-
-        <div className="mb-2">
-          <label className="text-sm text-gray-600">AVL (수정 불가)</label>
+        {[
+          "province",
+          "station",
+          "vehicleType",
+          "callSign",
+          "capacity",
+          "personnel",
+          "AVL",
+          "PSLTE",
+        ].map((field) => (
           <input
-            name="AVL"
-            value={editInputs.AVL || ""}
-            disabled
-            className="border p-2 w-full bg-gray-100 text-gray-500"
+            key={field}
+            name={field}
+            placeholder={field}
+            value={editInputs[field] || ""}
+            onChange={handleChange}
+            className="border p-2 w-full mb-2"
+            maxLength={field === "AVL" || field === "PSLTE" ? 13 : undefined}
           />
-        </div>
+        ))}
 
         <div className="flex justify-end gap-2 mt-4">
           <button

@@ -3,6 +3,7 @@ package com.example.demo.service;
 import com.example.demo.model.Vehicle;
 import com.example.demo.repository.VehicleRepository;
 import org.springframework.stereotype.Service;
+import jakarta.transaction.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -15,57 +16,57 @@ public class VehicleService {
         this.vehicleRepository = vehicleRepository;
     }
 
-    // 전체 차량 조회
+    @Transactional
+    public int setAllVehiclesStatusTo(String status) {
+        return vehicleRepository.updateAllVehicleStatus(status);
+    }
+
     public List<Vehicle> getAllVehicles() {
         return vehicleRepository.findAll();
     }
 
-    // 등록
     public Vehicle saveVehicle(Vehicle vehicle) {
         return vehicleRepository.save(vehicle);
     }
 
-    // 삭제
-    public void deleteById(String avl) {
-        vehicleRepository.deleteById(avl);
+    public void deleteById(Long id) {
+        vehicleRepository.deleteById(id);
     }
 
-    // 상태 변경
-    public void updateStatus(String avl, String newStatus) {
-        Optional<Vehicle> optional = vehicleRepository.findById(avl);
+    public void updateStatus(Long id, String newStatus) {
+        Optional<Vehicle> optional = vehicleRepository.findById(id);
         optional.ifPresent(v -> {
             v.setStatus(newStatus);
             vehicleRepository.save(v);
         });
     }
 
-    // 🔄 집결 상태 변경 (프론트에서 "O" 또는 "X" 값을 전달받음)
-    public void updateJipgyeol(String avl, String newJipgyeol) {
-        Optional<Vehicle> optional = vehicleRepository.findById(avl);
+    public void updateGathering(Long id, String newGathering) {
+        Optional<Vehicle> optional = vehicleRepository.findById(id);
         optional.ifPresent(v -> {
-            v.set집결(newJipgyeol);
+            v.setGathering(newGathering);
             vehicleRepository.save(v);
         });
     }
 
-    // 차량 전체 수정
-    public Vehicle updateVehicle(String avl, Vehicle updated) {
-        Optional<Vehicle> optional = vehicleRepository.findById(avl);
+    public Vehicle updateVehicle(Long id, Vehicle updated) {
+        Optional<Vehicle> optional = vehicleRepository.findById(id);
         if (optional.isPresent()) {
             Vehicle v = optional.get();
-            v.set시도(updated.get시도());
-            v.set소방서(updated.get소방서());
-            v.set차종(updated.get차종());
-            v.set호출명(updated.get호출명());
-            v.set용량(updated.get용량());
-            v.set인원(updated.get인원());
-            v.setPSLTE(updated.getPSLTE());
-            v.set집결(updated.get집결());
+            v.setProvince(updated.getProvince());
+            v.setStation(updated.getStation());
+            v.setVehicleType(updated.getVehicleType());
+            v.setCallSign(updated.getCallSign());
+            v.setCapacity(updated.getCapacity());
+            v.setPersonnel(updated.getPersonnel());
+            v.setPslte(updated.getPslte());
+            v.setAvl(updated.getAvl());
+            v.setGathering(updated.getGathering());
             v.setStatus(updated.getStatus());
+            v.setConfirm(updated.getConfirm());
             return vehicleRepository.save(v);
         } else {
-            throw new RuntimeException("수정 대상 차량이 존재하지 않음: " + avl);
+            throw new RuntimeException("수정 대상 차량이 존재하지 않음: " + id);
         }
     }
-
 }

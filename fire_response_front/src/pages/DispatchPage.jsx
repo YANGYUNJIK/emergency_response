@@ -36,38 +36,40 @@ function DispatchPage() {
     content: "",
   });
 
-  // 데이터 불러오기
+  // 1️⃣ 최초 데이터 불러오기
   useEffect(() => {
-    axios.get(BASE_URL).then((res) => setVehicles(res.data));
+    axios.get(BASE_URL).then((res) => {
+      setVehicles(res.data); // ✅ confirm 값은 그대로 유지
+    });
   }, []);
 
-  // 카테고리 숫자 클릭 시 → 차량 한 대씩 추가
+  // 2️⃣ 카테고리 클릭 시 차량 선택
   const filterVehicles = (regionType, category) => {
     const isGyeongbuk = (v) =>
       v.시도 === "경북" && v.집결 === "O" && v.status === "대기";
     const isOthers = (v) => v.시도 !== "경북" && v.status === "대기";
+    const alreadySelectedIds = new Set(selectedVehicles.map((v) => v.id));
 
     const filtered = vehicles.find((v) => {
-      if (regionType === "경북") return isGyeongbuk(v) && v.차종 === category;
-      if (regionType === "타시도") return isOthers(v) && v.차종 === category;
-      return false;
+      const isValid =
+        regionType === "경북"
+          ? isGyeongbuk(v) && v.차종 === category
+          : regionType === "타시도"
+          ? isOthers(v) && v.차종 === category
+          : false;
+      return isValid && !alreadySelectedIds.has(v.id);
     });
 
     if (!filtered) return;
 
-    // 선택된 차량에 추가
     setSelectedVehicles((prev) => [...prev, filtered]);
 
-    // 차량 상태를 출동대기로 업데이트
     setVehicles((prev) =>
-      prev.map((v) =>
-        v.AVL === filtered.AVL ? { ...v, status: "출동대기" } : v
-      )
+      prev.map((v) => (v.id === filtered.id ? { ...v, status: "출동대기" } : v))
     );
     setSelectedCategory(category);
   };
 
-  // 상태별 리스트
   const gyeongbuk = vehicles.filter(
     (v) => v.시도 === "경북" && v.집결 === "O" && v.status === "대기"
   );
@@ -78,35 +80,66 @@ function DispatchPage() {
   const countByCategory = (list, category) =>
     list.filter((v) => v.차종 === category).length;
 
-  // 출동 실행
+  // 3️⃣ 출동 버튼
   const handleDispatch = async () => {
-    for (const v of selectedVehicles) {
-      await axios.put(`${BASE_URL}/${v.AVL}/status`, "출동", {
-        headers: { "Content-Type": "text/plain" },
-      });
+    const message = `📍 출동 정보\n📞 연락처: ${contactInfo.tel}\n📍 주소: ${contactInfo.address}\n📝 내용: ${contactInfo.content}`;
+
+    try {
+      for (const v of selectedVehicles) {
+        // 기존: 상태를 "확인중"으로 변경
+        await axios.put(`${BASE_URL}/${v.id}/confirm`, "확인중", {
+          headers: { "Content-Type": "text/plain" },
+        });
+
+        // ✅ 문자 전송 API 호출
+        await axios.post("http://localhost:8080/sms/send", {
+          phoneNumber: v.PSLTE, // 실제 번호 or 테스트 번호
+          message: `[${v.호출명}] 차량\n${message}`,
+        });
+
+        // 기존: 콘솔 출력
+        console.log(`🚨 [${v.호출명}] 차량에 문자 전송됨:\n${message}`);
+      }
+
+      alert("🚀 출동 문자 전송 완료");
+
+      // 기존: confirm 상태 업데이트
+      setVehicles((prev) =>
+        prev.map((v) =>
+          selectedVehicles.some((sel) => sel.id === v.id)
+            ? { ...v, confirm: "확인중" }
+            : v
+        )
+      );
+    } catch (error) {
+      console.error("출동 문자 전송 실패", error);
+      alert("🚨 출동 문자 전송 실패");
     }
-    alert("🚨 출동 처리 완료 (문자 전송은 추후 연동)");
   };
 
-  // ✅ 차량 편성 초기화 함수
+  // 4️⃣ 편성 초기화
   const resetSelectedVehicles = () => {
-    // 출동대기 상태였던 차량들을 다시 대기로
     const restoredVehicles = vehicles.map((v) =>
-      v.status === "출동대기" ? { ...v, status: "대기" } : v
+      selectedVehicles.some((sel) => sel.id === v.id)
+        ? {
+            ...v,
+            status: v.confirm === "성공" ? "출동" : "대기",
+          }
+        : v
     );
+
     setVehicles(restoredVehicles);
     setSelectedVehicles([]);
     setSelectedCategory("");
     setContactInfo({ tel: "", address: "", content: "" });
   };
 
+  // 5️⃣ 편성에서 제거
   const handleRemoveFromDispatch = (vehicle) => {
-    // 1. 차량 편성 리스트에서 제거
-    setSelectedVehicles((prev) => prev.filter((v) => v.AVL !== vehicle.AVL));
+    setSelectedVehicles((prev) => prev.filter((v) => v.id !== vehicle.id));
 
-    // 2. 차량 상태를 다시 '대기'로 복원
     setVehicles((prev) =>
-      prev.map((v) => (v.AVL === vehicle.AVL ? { ...v, status: "대기" } : v))
+      prev.map((v) => (v.id === vehicle.id ? { ...v, status: "대기" } : v))
     );
   };
 
@@ -114,6 +147,7 @@ function DispatchPage() {
     <div className="p-6">
       <h1 className="text-xl font-bold mb-4">🚒 차량 현황</h1>
 
+      {/* 현황 테이블 */}
       <table className="w-full table-auto border-collapse mb-6">
         <thead>
           <tr className="bg-gray-200">
@@ -184,15 +218,14 @@ function DispatchPage() {
             <tbody>
               {selectedVehicles.map((v, i) => (
                 <tr
-                  key={v.AVL}
+                  key={v.id}
                   className={`cursor-pointer ${
-                    selectedVehicleForDispatch?.AVL === v.AVL
+                    selectedVehicleForDispatch?.id === v.id
                       ? "bg-yellow-200"
                       : ""
                   }`}
-                  onClick={() => setSelectedVehicleForDispatch(v)}
+                  onClick={() => handleRemoveFromDispatch(v)}
                 >
-                  {/* 위 tr 수정 */}
                   <td className="border px-2 py-1 text-center">{i + 1}</td>
                   <td className="border px-2 py-1 text-center">{v.시도}</td>
                   <td className="border px-2 py-1 text-center">{v.소방서}</td>
@@ -202,7 +235,44 @@ function DispatchPage() {
                   <td className="border px-2 py-1 text-center">{v.인원}</td>
                   <td className="border px-2 py-1 text-center">{v.AVL}</td>
                   <td className="border px-2 py-1 text-center">{v.PSLTE}</td>
-                  <td className="border px-2 py-1 text-center">대기중</td>
+                  <td
+                    className="border px-2 py-1 text-center cursor-pointer"
+                    onClick={async (e) => {
+                      e.stopPropagation(); // 차량 제거 클릭 방지
+
+                      if (v.confirm === "확인중") {
+                        try {
+                          await axios.put(
+                            `${BASE_URL}/${v.id}/confirm`,
+                            "성공",
+                            {
+                              headers: { "Content-Type": "text/plain" },
+                            }
+                          );
+                          await axios.put(
+                            `${BASE_URL}/${v.id}/status`,
+                            "출동",
+                            {
+                              headers: { "Content-Type": "text/plain" },
+                            }
+                          );
+
+                          setVehicles((prev) =>
+                            prev.map((v2) =>
+                              v2.id === v.id
+                                ? { ...v2, confirm: "성공", status: "출동" }
+                                : v2
+                            )
+                          );
+                        } catch (error) {
+                          console.error("확인 처리 실패", error);
+                          alert("🚨 확인 처리 중 오류 발생");
+                        }
+                      }
+                    }}
+                  >
+                    {v.confirm || "미전송"}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -242,19 +312,17 @@ function DispatchPage() {
               >
                 🚀 출동
               </button>
+
+              {/* 하단 버튼 */}
               <div className="flex gap-2 mt-4">
                 <button
                   className="bg-purple-600 text-white py-2 px-4 rounded disabled:bg-gray-400"
                   onClick={async () => {
                     if (selectedVehicleForDispatch) {
                       await axios.put(
-                        `${BASE_URL}/${selectedVehicleForDispatch.AVL}/status`,
+                        `${BASE_URL}/${selectedVehicleForDispatch.id}/status`,
                         "출동",
-                        {
-                          headers: {
-                            "Content-Type": "text/plain",
-                          },
-                        }
+                        { headers: { "Content-Type": "text/plain" } }
                       );
                       alert(
                         `🚨 ${selectedVehicleForDispatch.호출명} 차량이 출동 처리되었습니다.`
@@ -270,6 +338,15 @@ function DispatchPage() {
                 <button
                   className="bg-gray-600 text-white py-2 px-4 rounded"
                   onClick={() => {
+                    const restored = vehicles.map((v) =>
+                      selectedVehicles.some((sel) => sel.id === v.id)
+                        ? {
+                            ...v,
+                            status: v.confirm === "성공" ? "출동" : "대기",
+                          }
+                        : v
+                    );
+                    setVehicles(restored);
                     setSelectedVehicles([]);
                     setSelectedCategory("");
                     setContactInfo({ tel: "", address: "", content: "" });

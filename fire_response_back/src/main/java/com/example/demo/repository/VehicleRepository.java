@@ -2,10 +2,16 @@ package com.example.demo.repository;
 
 import com.example.demo.model.Vehicle;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-// 🔹 CRUD 기능을 자동으로 만들어주는 인터페이스
 @Repository
-public interface VehicleRepository extends JpaRepository<Vehicle, String> {
-    // AVL이 Primary Key (String)
+public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
+
+    // 🔄 모든 차량의 상태를 특정 값으로 일괄 변경
+    @Modifying
+    @Query("UPDATE Vehicle v SET v.status = :status")
+    int updateAllVehicleStatus(@Param("status") String status);
 }
