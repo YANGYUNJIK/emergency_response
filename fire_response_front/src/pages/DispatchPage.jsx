@@ -46,16 +46,16 @@ function DispatchPage() {
   // 2️⃣ 카테고리 클릭 시 차량 선택
   const filterVehicles = (regionType, category) => {
     const isGyeongbuk = (v) =>
-      v.시도 === "경북" && v.집결 === "O" && v.status === "대기";
-    const isOthers = (v) => v.시도 !== "경북" && v.status === "대기";
+      v.province === "경북" && v.gathering === "O" && v.status === "대기";
+    const isOthers = (v) => v.province !== "경북" && v.status === "대기";
     const alreadySelectedIds = new Set(selectedVehicles.map((v) => v.id));
 
     const filtered = vehicles.find((v) => {
       const isValid =
         regionType === "경북"
-          ? isGyeongbuk(v) && v.차종 === category
+          ? isGyeongbuk(v) && v.vehicleType === category
           : regionType === "타시도"
-          ? isOthers(v) && v.차종 === category
+          ? isOthers(v) && v.vehicleType === category
           : false;
       return isValid && !alreadySelectedIds.has(v.id);
     });
@@ -71,14 +71,14 @@ function DispatchPage() {
   };
 
   const gyeongbuk = vehicles.filter(
-    (v) => v.시도 === "경북" && v.집결 === "O" && v.status === "대기"
+    (v) => v.province === "경북" && v.gathering === "O" && v.status === "대기"
   );
   const others = vehicles.filter(
-    (v) => v.시도 !== "경북" && v.status === "대기"
+    (v) => v.province !== "경북" && v.status === "대기"
   );
 
   const countByCategory = (list, category) =>
-    list.filter((v) => v.차종 === category).length;
+    list.filter((v) => v.vehicleType === category).length;
 
   // 3️⃣ 출동 버튼
   const handleDispatch = async () => {
@@ -94,11 +94,11 @@ function DispatchPage() {
         // ✅ 문자 전송 API 호출
         await axios.post("http://localhost:8080/sms/send", {
           phoneNumber: v.PSLTE, // 실제 번호 or 테스트 번호
-          message: `[${v.호출명}] 차량\n${message}`,
+          message: `[${v.callSign}] 차량\n${message}`,
         });
 
         // 기존: 콘솔 출력
-        console.log(`🚨 [${v.호출명}] 차량에 문자 전송됨:\n${message}`);
+        console.log(`🚨 [${v.callSign}] 차량에 문자 전송됨:\n${message}`);
       }
 
       alert("🚀 출동 문자 전송 완료");
@@ -227,12 +227,16 @@ function DispatchPage() {
                   onClick={() => handleRemoveFromDispatch(v)}
                 >
                   <td className="border px-2 py-1 text-center">{i + 1}</td>
-                  <td className="border px-2 py-1 text-center">{v.시도}</td>
-                  <td className="border px-2 py-1 text-center">{v.소방서}</td>
-                  <td className="border px-2 py-1 text-center">{v.호출명}</td>
-                  <td className="border px-2 py-1 text-center">{v.차종}</td>
-                  <td className="border px-2 py-1 text-center">{v.용량}</td>
-                  <td className="border px-2 py-1 text-center">{v.인원}</td>
+                  <td className="border px-2 py-1 text-center">{v.province}</td>
+                  <td className="border px-2 py-1 text-center">{v.station}</td>
+                  <td className="border px-2 py-1 text-center">{v.capacity}</td>
+                  <td className="border px-2 py-1 text-center">
+                    {v.vehicleType}
+                  </td>
+                  <td className="border px-2 py-1 text-center">{v.capacity}</td>
+                  <td className="border px-2 py-1 text-center">
+                    {v.personnel}
+                  </td>
                   <td className="border px-2 py-1 text-center">{v.AVL}</td>
                   <td className="border px-2 py-1 text-center">{v.PSLTE}</td>
                   <td
@@ -271,7 +275,9 @@ function DispatchPage() {
                       }
                     }}
                   >
-                    {v.confirm || "미전송"}
+                    {v.confirm === null || v.confirm === ""
+                      ? "미전송"
+                      : v.confirm}
                   </td>
                 </tr>
               ))}
@@ -306,35 +312,15 @@ function DispatchPage() {
                   setContactInfo({ ...contactInfo, content: e.target.value })
                 }
               />
-              <button
-                className="bg-blue-600 text-white py-2 rounded"
-                onClick={handleDispatch}
-              >
-                🚀 출동
-              </button>
 
               {/* 하단 버튼 */}
               <div className="flex gap-2 mt-4">
                 <button
-                  className="bg-purple-600 text-white py-2 px-4 rounded disabled:bg-gray-400"
-                  onClick={async () => {
-                    if (selectedVehicleForDispatch) {
-                      await axios.put(
-                        `${BASE_URL}/${selectedVehicleForDispatch.id}/status`,
-                        "출동",
-                        { headers: { "Content-Type": "text/plain" } }
-                      );
-                      alert(
-                        `🚨 ${selectedVehicleForDispatch.호출명} 차량이 출동 처리되었습니다.`
-                      );
-                      setSelectedVehicleForDispatch(null);
-                    }
-                  }}
-                  disabled={!selectedVehicleForDispatch}
+                  className="bg-blue-600 text-white py-2 px-4 rounded"
+                  onClick={handleDispatch}
                 >
-                  🚀 출동(임시)
+                  🚀 출동
                 </button>
-
                 <button
                   className="bg-gray-600 text-white py-2 px-4 rounded"
                   onClick={() => {

@@ -18,8 +18,19 @@ public class VehicleService {
 
     @Transactional
     public int setAllVehiclesStatusTo(String status) {
-        return vehicleRepository.updateAllVehicleStatus(status);
+        List<Vehicle> vehicles = vehicleRepository.findAll();
+        int updatedCount = 0;
+        for (Vehicle v : vehicles) {
+            v.setStatus(status);
+            if ("대기".equals(status)) {
+                v.setConfirm("미전송");
+            }
+            vehicleRepository.save(v);
+            updatedCount++;
+        }
+        return updatedCount;
     }
+
 
     public List<Vehicle> getAllVehicles() {
         return vehicleRepository.findAll();
@@ -37,6 +48,10 @@ public class VehicleService {
         Optional<Vehicle> optional = vehicleRepository.findById(id);
         optional.ifPresent(v -> {
             v.setStatus(newStatus);
+            // ✅ 상태가 '대기'일 경우 confirm 초기화
+            if ("대기".equals(newStatus)) {
+                v.setConfirm("미전송");
+            }
             vehicleRepository.save(v);
         });
     }
