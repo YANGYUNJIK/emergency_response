@@ -35,6 +35,16 @@ public class VehicleController {
 
     private final VehicleService vehicleService;
 
+    // ✅ 새 API 추가
+    @PutMapping("/avl/{avl}/status")
+    public ResponseEntity<String> updateStatusByAvl(
+        @PathVariable String avl,
+        @RequestBody String status
+    ) {
+        vehicleService.updateStatusByAvl(avl, status);
+        return ResponseEntity.ok("상태가 '출동'으로 변경되었습니다.");
+    }
+
     public VehicleController(VehicleService vehicleService) {
         this.vehicleService = vehicleService;
     }

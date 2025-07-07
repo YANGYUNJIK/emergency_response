@@ -8,6 +8,7 @@ import ActivityPage from "./pages/ActivityPage"; // ✅ 활동 현황 페이지
 import ActivityMapPage from "./pages/ActivityMapPage"; // ✅ 활동 지도 페이지
 import StatsPage from "./pages/StatsPage"; // ✅ 통계 페이지
 import GpsReceivePage from "./pages/GpsReceivePage"; // ✅ 통계 페이지
+import DispatchConfirmPage from "./pages/DispatchConfirmPage"; // 출동 확인 페이지
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
         <Route path="/activity/map" element={<ActivityMapPage />} />
         <Route path="/stats" element={<StatsPage />} />
         <Route path="/gps/agree/:vehicleId" element={<GpsReceivePage />} />
+        <Route path="/dispatch-confirm" element={<DispatchConfirmPage />} />
       </Routes>
     </Router>
   );

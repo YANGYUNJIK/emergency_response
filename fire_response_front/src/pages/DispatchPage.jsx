@@ -82,38 +82,30 @@ function DispatchPage() {
 
   // 3️⃣ 출동 버튼
   const handleDispatch = async () => {
-    const message = `📍 출동 정보\n📞 연락처: ${contactInfo.tel}\n📍 주소: ${contactInfo.address}\n📝 내용: ${contactInfo.content}`;
-
     try {
       for (const v of selectedVehicles) {
-        // 기존: 상태를 "확인중"으로 변경
+        const confirmLink = `https://your-app.netlify.app/dispatch-confirm?avl=${v.AVL}`;
+
+        const message = `📍 출동 정보
+📞 연락처: ${contactInfo.tel}
+📍 주소: ${contactInfo.address}
+📝 내용: ${contactInfo.content}
+✅ 출동 확인: ${confirmLink}`;
+
         await axios.put(`${BASE_URL}/${v.id}/confirm`, "확인중", {
           headers: { "Content-Type": "text/plain" },
         });
 
-        // ✅ 문자 전송 API 호출
         await axios.post("http://localhost:8080/sms/send", {
-          phoneNumber: v.PSLTE, // 실제 번호 or 테스트 번호
+          phoneNumber: v.PSLTE,
           message: `[${v.callSign}] 차량\n${message}`,
         });
-
-        // 기존: 콘솔 출력
-        console.log(`🚨 [${v.callSign}] 차량에 문자 전송됨:\n${message}`);
       }
 
-      alert("🚀 출동 문자 전송 완료");
-
-      // 기존: confirm 상태 업데이트
-      setVehicles((prev) =>
-        prev.map((v) =>
-          selectedVehicles.some((sel) => sel.id === v.id)
-            ? { ...v, confirm: "확인중" }
-            : v
-        )
-      );
-    } catch (error) {
-      console.error("출동 문자 전송 실패", error);
-      alert("🚨 출동 문자 전송 실패");
+      alert("✅ 출동 문자 전송 완료");
+    } catch (err) {
+      console.error("❌ 문자 전송 실패", err);
+      alert("출동 문자 전송 중 오류 발생");
     }
   };
 

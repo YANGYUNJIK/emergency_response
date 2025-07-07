@@ -12,6 +12,16 @@ import java.util.Optional;
 public class VehicleService {
     private final VehicleRepository vehicleRepository;
 
+    // ✅ 추가된 메서드
+    @Transactional
+    public void updateStatusByAvl(String avl, String status) {
+        Vehicle vehicle = vehicleRepository.findByAvl(avl)
+            .orElseThrow(() -> new RuntimeException("해당 AVL의 차량이 없습니다."));
+        vehicle.setStatus(status);
+        vehicle.setConfirm("성공");
+        vehicleRepository.save(vehicle);
+    }
+
     public VehicleService(VehicleRepository vehicleRepository) {
         this.vehicleRepository = vehicleRepository;
     }
