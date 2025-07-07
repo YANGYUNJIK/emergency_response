@@ -80,11 +80,20 @@ function DispatchPage() {
   const countByCategory = (list, category) =>
     list.filter((v) => v.vehicleType === category).length;
 
+  // 정규화
+  const normalizePhoneNumber = (raw) => {
+    const digits = raw.replace(/\D/g, ""); // 숫자만 추출
+    if (digits.length === 11) {
+      return digits.replace(/(\d{3})(\d{4})(\d{4})/, "$1-$2-$3"); // 010-1234-5678
+    }
+    return digits; // fallback
+  };
+
   // 3️⃣ 출동 버튼
   const handleDispatch = async () => {
     try {
       for (const v of selectedVehicles) {
-        const confirmLink = `https://your-app.netlify.app/dispatch-confirm?avl=${v.AVL}`;
+        const confirmLink = `https://fireresponse.netlify.app/dispatch-confirm?avl=${v.AVL}`;
 
         const message = `📍 출동 정보
 📞 연락처: ${contactInfo.tel}
@@ -97,7 +106,7 @@ function DispatchPage() {
         });
 
         await axios.post("http://localhost:8080/sms/send", {
-          phoneNumber: v.PSLTE,
+          phoneNumber: normalizePhoneNumber(v.AVL),
           message: `[${v.callSign}] 차량\n${message}`,
         });
       }
