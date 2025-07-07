@@ -19,9 +19,14 @@ public class SmsController {
 
     @PostMapping("/send")
     public ResponseEntity<String> sendSms(@RequestBody SmsRequest request) {
-        boolean success = smsService.sendSms(request.getPhoneNumber(), request.getMessage());
+        String baseUrl = "https://your-domain.netlify.app"; // Netlify 주소로 교체
+        String gpsLink = baseUrl + "/gps/agree/" + request.getVehicleId();
+        String message = "[GPS 동의 요청]\n아래 링크를 눌러 위치 공유를 허용해주세요.\n" + gpsLink;
+
+        boolean success = smsService.sendSms(request.getPhoneNumber(), message);
         return success
             ? ResponseEntity.ok("문자 발송 성공")
             : ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("문자 발송 실패");
     }
+
 }

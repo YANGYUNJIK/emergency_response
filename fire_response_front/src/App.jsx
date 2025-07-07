@@ -21,7 +21,7 @@ function App() {
         <Route path="/activity" element={<ActivityPage />} />
         <Route path="/activity/map" element={<ActivityMapPage />} />
         <Route path="/stats" element={<StatsPage />} />
-        <Route path="/gps" element={<GpsReceivePage />} />
+        <Route path="/gps/agree/:vehicleId" element={<GpsReceivePage />} />
       </Routes>
     </Router>
   );

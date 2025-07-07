@@ -35,6 +35,10 @@ function ActivityMapPage() {
   const [filteredData, setFilteredData] = useState(dummyData);
   const [gpsData, setGpsData] = useState([]);
 
+  const infoWindowRef = useRef(null); // 현재 열린 InfoWindow
+  const openedMarkerRef = useRef(null); // 현재 열린 마커
+  const markersRef = useRef([]); // 모든 마커를 저장
+
   useEffect(() => {
     if (window.kakao && window.kakao.maps) {
       drawMap();
@@ -68,55 +72,67 @@ function ActivityMapPage() {
     const map = new window.kakao.maps.Map(container, options);
     mapRef.current.__kakaoMap__ = map;
 
-    // 기존 dummyData 마커
+    // ✅ 기존 마커 제거
+    markersRef.current.forEach((m) => m.setMap(null));
+    markersRef.current = [];
+
+    // 🔁 마커 클릭 시 infoWindow toggle 지원
+    const createMarker = (lat, lng, content, source) => {
+      const marker = new window.kakao.maps.Marker({
+        position: new window.kakao.maps.LatLng(lat, lng),
+        map,
+      });
+
+      const infoWindow = new window.kakao.maps.InfoWindow({ content });
+
+      window.kakao.maps.event.addListener(marker, "click", () => {
+        const alreadyOpen =
+          infoWindowRef.current && openedMarkerRef.current === marker;
+
+        if (alreadyOpen) {
+          infoWindowRef.current.close();
+          infoWindowRef.current = null;
+          openedMarkerRef.current = null;
+        } else {
+          if (infoWindowRef.current) infoWindowRef.current.close();
+          infoWindow.open(map, marker);
+          infoWindowRef.current = infoWindow;
+          openedMarkerRef.current = marker;
+        }
+      });
+
+      markersRef.current.push(marker); // ✅ 마커 저장
+    };
+
+    // ✅ dummyData 마커
     filteredData.forEach((vehicle) => {
-      const marker = new window.kakao.maps.Marker({
-        position: new window.kakao.maps.LatLng(vehicle.lat, vehicle.lng),
-        map,
-      });
-
-      const infoWindow = new window.kakao.maps.InfoWindow({
-        content: `
-          <div style="padding:10px; font-size:14px;">
-            🚒 호출명: ${vehicle.callSign ?? "없음"}<br/>
-            📍 차종: ${vehicle.vehicleType ?? "없음"}<br/>
-            🧯 소방서: ${vehicle.station ?? "없음"}<br/>
-            🧭 시도: ${vehicle.province ?? "없음"}<br/>
-            🌐 상태: ${vehicle.status ?? "없음"}
-          </div>
-        `,
-      });
-
-      window.kakao.maps.event.addListener(marker, "click", () => {
-        infoWindow.open(map, marker);
-      });
+      const content = `
+      <div style="padding:10px; font-size:14px;">
+        🚒 호출명: ${vehicle.callSign ?? "없음"}<br/>
+        📍 차종: ${vehicle.vehicleType ?? "없음"}<br/>
+        🧯 소방서: ${vehicle.station ?? "없음"}<br/>
+        🧭 시도: ${vehicle.province ?? "없음"}<br/>
+        🌐 상태: ${vehicle.status ?? "없음"}
+      </div>
+    `;
+      createMarker(vehicle.lat, vehicle.lng, content, "dummy");
     });
 
-    // GPS 데이터 마커
+    // ✅ GPS 마커
     gpsData.forEach((gps) => {
-      const marker = new window.kakao.maps.Marker({
-        position: new window.kakao.maps.LatLng(gps.lat, gps.lng),
-        map,
-      });
-
-      const infoWindow = new window.kakao.maps.InfoWindow({
-        content: `
-          <div style="padding:10px; font-size:14px;">
-            🚒 호출명: ${gps.callSign ?? "없음"}<br/>
-            📍 차종: ${gps.vehicleType ?? "없음"}<br/>
-            🧯 소방서: ${gps.station ?? "없음"}<br/>
-            🧭 시도: ${gps.province ?? "없음"}<br/>
-            🌐 상태: ${gps.status ?? "없음"}
-          </div>
-        `,
-      });
-
-      window.kakao.maps.event.addListener(marker, "click", () => {
-        infoWindow.open(map, marker);
-      });
+      const content = `
+      <div style="padding:10px; font-size:14px;">
+        🚒 호출명: ${gps.callSign ?? "없음"}<br/>
+        📍 차종: ${gps.vehicleType ?? "없음"}<br/>
+        🧯 소방서: ${gps.station ?? "없음"}<br/>
+        🧭 시도: ${gps.province ?? "없음"}<br/>
+        🌐 상태: ${gps.status ?? "없음"}
+      </div>
+    `;
+      createMarker(gps.lat, gps.lng, content, "gps");
     });
 
-    // 내 위치 마커 표시 + 가장 가까운 차량 정보 표시
+    // ✅ 내 위치 마커
     if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition((position) => {
         const { latitude, longitude } = position.coords;
@@ -125,7 +141,6 @@ function ActivityMapPage() {
         // 가장 가까운 차량 탐색
         let closest = null;
         let minDist = Number.MAX_VALUE;
-
         gpsData.forEach((gps) => {
           const dist = Math.sqrt(
             Math.pow(gps.lat - latitude, 2) + Math.pow(gps.lng - longitude, 2)
@@ -142,20 +157,22 @@ function ActivityMapPage() {
           title: "내 위치",
         });
 
-        const infoWindow = new window.kakao.maps.InfoWindow({
-          content: `
-            <div style="padding:10px; font-size:14px;">
-              🚒 호출명: ${closest?.callSign ?? "없음"}<br/>
-              📍 차종: ${closest?.vehicleType ?? "없음"}<br/>
-              🧯 소방서: ${closest?.station ?? "없음"}<br/>
-              🧭 시도: ${closest?.province ?? "없음"}<br/>
-              🌐 상태: ${closest?.status ?? "없음"}
-            </div>
-          `,
-        });
+        const content = `
+        <div style="padding:10px; font-size:14px;">
+          🚒 호출명: ${closest?.callSign ?? "없음"}<br/>
+          📍 차종: ${closest?.vehicleType ?? "없음"}<br/>
+          🧯 소방서: ${closest?.station ?? "없음"}<br/>
+          🧭 시도: ${closest?.province ?? "없음"}<br/>
+          🌐 상태: ${closest?.status ?? "없음"}
+        </div>
+      `;
+
+        const infoWindow = new window.kakao.maps.InfoWindow({ content });
 
         infoWindow.open(map, marker);
         map.setCenter(locPosition);
+
+        markersRef.current.push(marker);
       });
     }
   };

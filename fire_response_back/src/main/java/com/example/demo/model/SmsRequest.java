@@ -2,7 +2,7 @@ package com.example.demo.model;
 
 public class SmsRequest {
     private String phoneNumber;
-    private String message;
+    private Long vehicleId;
 
     public String getPhoneNumber() {
         return phoneNumber;
@@ -12,11 +12,11 @@ public class SmsRequest {
         this.phoneNumber = phoneNumber;
     }
 
-    public String getMessage() {
-        return message;
+    public Long getVehicleId() {
+        return vehicleId;
     }
 
-    public void setMessage(String message) {
-        this.message = message;
+    public void setVehicleId(Long vehicleId) {
+        this.vehicleId = vehicleId;
     }
 }

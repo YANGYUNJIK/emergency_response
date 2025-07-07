@@ -32,12 +32,23 @@ function RegisterPage() {
   // 수정 모달을 위한
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editVehicleData, setEditVehicleData] = useState(null);
+  const [gpsAgreedIds, setGpsAgreedIds] = useState([]); // Gps 동의 차량
 
   useEffect(() => {
+    // 차량 목록 가져오기
     axios
       .get(BASE_URL)
       .then((res) => setVehicles(res.data))
       .catch((err) => console.error("불러오기 실패:", err));
+
+    // ✅ GPS 동의한 차량 ID 목록 가져오기
+    axios
+      .get("http://localhost:8080/gps/all")
+      .then((res) => {
+        const ids = res.data.map((item) => item.id); // vehicleId = id
+        setGpsAgreedIds(ids);
+      })
+      .catch((err) => console.error("GPS 정보 불러오기 실패:", err));
   }, []);
 
   const handleChange = (e) => {
@@ -55,19 +66,22 @@ function RegisterPage() {
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    if (
-      inputs.AVL &&
-      vehicles.some((v) => v.AVL === formatPhoneNumber(inputs.AVL))
-    ) {
-      alert("❌ 이미 등록된 AVL 번호입니다!");
-      return;
+    const formattedAvl = formatPhoneNumber(inputs.AVL);
+
+    if (formattedAvl) {
+      const isDuplicateAvl = vehicles.some((v) => v.AVL === formattedAvl);
+      if (isDuplicateAvl) {
+        alert("❌ 이미 등록된 AVL 번호입니다!");
+        return;
+      }
     }
 
     const gathering = inputs.province === "경북" ? "X" : "O";
     const vehicleData = {
       ...inputs,
+      AVL: formattedAvl, // ✅ 포맷된 AVL 사용
       gathering,
-      status: "대기", // 항상 초기화
+      status: "대기",
     };
 
     if (isEditMode) {
@@ -88,11 +102,6 @@ function RegisterPage() {
         });
     } else {
       // 🆕 등록 모드
-      if (vehicles.some((v) => v.AVL === formatPhoneNumber(inputs.AVL))) {
-        alert("❌ 이미 등록된 AVL 번호입니다!");
-        return;
-      }
-
       axios
         .post(BASE_URL, vehicleData)
         .then((res) => {
@@ -125,13 +134,11 @@ function RegisterPage() {
     setEditVehicleData(vehicle);
     setEditModalVisible(true);
     setEditTargetId(vehicle.id);
-    setIsEditMode(true);
   };
 
   const handleEditSave = (updatedVehicle) => {
     const formattedAvl = formatPhoneNumber(updatedVehicle.AVL || "");
 
-    // ✅ AVL이 입력된 경우에만 중복 검사
     if (
       formattedAvl &&
       vehicles.some((v) => v.id !== updatedVehicle.id && v.AVL === formattedAvl)
@@ -225,6 +232,27 @@ function RegisterPage() {
         );
       })
       .catch((err) => console.error("상태 변경 실패:", err));
+  };
+
+  const handleSendSms = (vehicle) => {
+    const phoneNumber = vehicle.AVL; // 또는 vehicle.PSLTE
+    if (!phoneNumber) {
+      alert(`[${vehicle.callSign}] 전화번호가 없습니다.`);
+      return;
+    }
+
+    axios
+      .post("http://localhost:8080/sms/send", {
+        phoneNumber,
+        vehicleId: vehicle.id,
+      })
+      .then(() => {
+        alert(`[${vehicle.callSign}] 문자 전송 완료!`);
+      })
+      .catch((err) => {
+        console.error("문자 전송 실패:", err);
+        alert(`[${vehicle.callSign}] 문자 전송 실패!`);
+      });
   };
 
   const handleDelete = (id) => {
@@ -366,43 +394,40 @@ function RegisterPage() {
 
         <form onSubmit={handleSubmit} className="flex flex-wrap gap-2 mb-4">
           {[
-            "시도",
-            "소방서",
-            "차종",
-            "호출명",
-            "용량",
-            "인원",
-            "AVL",
-            // placeholder AVL 단말기 번호
-            "PSLTE",
-          ].map((field) => (
+            { label: "시도", name: "province" },
+            { label: "소방서", name: "station" },
+            { label: "차종", name: "vehicleType" },
+            { label: "호출명", name: "callSign" },
+            { label: "용량", name: "capacity" },
+            { label: "인원", name: "personnel" },
+            { label: "AVL", name: "AVL" },
+            { label: "PSLTE", name: "PSLTE" },
+          ].map(({ label, name }) => (
             <input
-              key={field}
-              name={field}
+              key={name}
+              name={name} // ✅ 이제 일치함
               placeholder={
-                field === "PSLTE"
+                name === "PSLTE"
                   ? "PS-LTE 번호"
-                  : field === "AVL"
+                  : name === "AVL"
                   ? "AVL 단말기 번호"
-                  : field
+                  : label
               }
-              value={inputs[field]}
+              value={inputs[name]}
               onChange={handleChange}
               className="border p-2 w-40"
-              maxLength={field === "PSLTE" ? 13 : undefined}
+              maxLength={name === "PSLTE" ? 13 : undefined}
             />
           ))}
 
           <button
             type="submit"
-            className={`${
-              isEditMode ? "bg-green-600" : "bg-blue-500"
-            } text-white px-4 py-2 rounded`}
+            className="bg-blue-500 text-white px-4 py-2 rounded"
           >
-            {isEditMode ? "수정 완료" : "등록"}
+            등록
           </button>
 
-          {isEditMode && (
+          {/* {isEditMode && (
             <button
               type="button"
               onClick={resetForm}
@@ -410,7 +435,7 @@ function RegisterPage() {
             >
               취소
             </button>
-          )}
+          )} */}
 
           <button
             type="button"
@@ -484,68 +509,74 @@ function RegisterPage() {
             </tr>
           </thead>
           <tbody>
-            {filteredVehicles.map((v, index) => (
-              <tr key={v.id}>
-                <td className="border px-2 py-1 text-center">{index + 1}</td>
-                <td className="border px-2 py-1 text-center">{v.province}</td>
-                <td className="border px-2 py-1 text-center">{v.station}</td>
-                <td className="border px-2 py-1 text-center">
-                  {v.vehicleType}
-                </td>
-                <td className="border px-2 py-1 text-center">{v.callSign}</td>
-                <td className="border px-2 py-1 text-center">{v.capacity}</td>
-                <td className="border px-2 py-1 text-center">{v.personnel}</td>
-                <td className="border px-2 py-1 text-center">{v.AVL}</td>
-                <td className="border px-2 py-1 text-center">{v.PSLTE}</td>
-                <td className="border px-2 py-1 text-center">{v.status}</td>
-                <td
-                  className="border px-2 py-1 text-center cursor-pointer"
-                  onClick={() => handleGatheringToggle(v.id)}
+            {filteredVehicles.map((v, index) => {
+              const isGpsAgreed = gpsAgreedIds.includes(v.id); // ✅ GPS 동의 여부 확인
+              return (
+                <tr
+                  key={v.id}
+                  className={isGpsAgreed ? "bg-green-100" : ""} // ✅ 동의한 차량은 배경색 적용
                 >
-                  {v.gathering}
-                </td>
-                <td className="border px-2 py-1 text-center space-x-1">
-                  <button
-                    onClick={() => handleStatusChange(v.id, "대기")}
-                    className="bg-purple-500 text-white px-2 py-1 rounded"
+                  <td className="border px-2 py-1 text-center">{index + 1}</td>
+                  <td className="border px-2 py-1 text-center">{v.province}</td>
+                  <td className="border px-2 py-1 text-center">{v.station}</td>
+                  <td className="border px-2 py-1 text-center">
+                    {v.vehicleType}
+                  </td>
+                  <td className="border px-2 py-1 text-center">{v.callSign}</td>
+                  <td className="border px-2 py-1 text-center">{v.capacity}</td>
+                  <td className="border px-2 py-1 text-center">
+                    {v.personnel}
+                  </td>
+                  <td className="border px-2 py-1 text-center">{v.AVL}</td>
+                  <td className="border px-2 py-1 text-center">{v.PSLTE}</td>
+                  <td className="border px-2 py-1 text-center">{v.status}</td>
+                  <td
+                    className="border px-2 py-1 text-center cursor-pointer"
+                    onClick={() => handleGatheringToggle(v.id)}
                   >
-                    대기
-                  </button>
-                  <button
-                    onClick={() => handleStatusChange(v.id, "도착")}
-                    className="bg-green-500 text-white px-2 py-1 rounded"
-                  >
-                    도착
-                  </button>
-                  <button
-                    onClick={() => handleStatusChange(v.id, "철수")}
-                    className="bg-red-500 text-white px-2 py-1 rounded"
-                  >
-                    철수
-                  </button>
-                  <button
-                    onClick={() => handleEdit(v)}
-                    className="bg-blue-400 text-white px-2 py-1 rounded"
-                  >
-                    수정
-                  </button>
-                  <button
-                    onClick={() =>
-                      alert(`[${v.callSign}] 차량에 문자 전송됨 (모의)`)
-                    }
-                    className="bg-yellow-500 text-white px-2 py-1 rounded"
-                  >
-                    문자
-                  </button>
-                  <button
-                    onClick={() => handleDelete(v.id)}
-                    className="bg-gray-500 text-white px-2 py-1 rounded"
-                  >
-                    삭제
-                  </button>
-                </td>
-              </tr>
-            ))}
+                    {v.gathering}
+                  </td>
+                  <td className="border px-2 py-1 text-center space-x-1">
+                    <button
+                      onClick={() => handleStatusChange(v.id, "대기")}
+                      className="bg-purple-500 text-white px-2 py-1 rounded"
+                    >
+                      대기
+                    </button>
+                    <button
+                      onClick={() => handleStatusChange(v.id, "도착")}
+                      className="bg-green-500 text-white px-2 py-1 rounded"
+                    >
+                      도착
+                    </button>
+                    <button
+                      onClick={() => handleStatusChange(v.id, "철수")}
+                      className="bg-red-500 text-white px-2 py-1 rounded"
+                    >
+                      철수
+                    </button>
+                    <button
+                      onClick={() => handleEdit(v)}
+                      className="bg-blue-400 text-white px-2 py-1 rounded"
+                    >
+                      수정
+                    </button>
+                    <button
+                      onClick={() => handleSendSms(v)}
+                      className="bg-yellow-500 text-white px-2 py-1 rounded"
+                    >
+                      문자
+                    </button>
+                    <button
+                      onClick={() => handleDelete(v.id)}
+                      className="bg-gray-500 text-white px-2 py-1 rounded"
+                    >
+                      삭제
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
