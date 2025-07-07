@@ -3,8 +3,8 @@ package com.example.demo.controller;
 import com.example.demo.dto.GpsLocationRequest;
 import com.example.demo.model.GpsLocation;
 import com.example.demo.model.Vehicle;
-import com.example.demo.repository.GpsLocationRepository;
 import com.example.demo.repository.VehicleRepository;
+import com.example.demo.service.GpsService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,16 +14,15 @@ import java.util.*;
 @RequestMapping("/gps")
 public class GpsController {
 
-    private final GpsLocationRepository gpsLocationRepository;
+    private final GpsService gpsService;
     private final VehicleRepository vehicleRepository;
 
-    public GpsController(GpsLocationRepository gpsLocationRepository,
-                         VehicleRepository vehicleRepository) {
-        this.gpsLocationRepository = gpsLocationRepository;
+    public GpsController(GpsService gpsService, VehicleRepository vehicleRepository) {
+        this.gpsService = gpsService;
         this.vehicleRepository = vehicleRepository;
     }
 
-    // ✅ [신규] GPS 동의 페이지 반환 (HTML)
+    // ✅ GPS 동의 페이지 (HTML)
     @GetMapping("/agree/{vehicleId}")
     public ResponseEntity<String> agreePage(@PathVariable Long vehicleId) {
         String html = """
@@ -72,7 +71,7 @@ public class GpsController {
         return ResponseEntity.ok().header("Content-Type", "text/html").body(html);
     }
 
-    // ✅ 위치 수신 API (프론트에서 위치 POST)
+    // ✅ 위치 수신 API (중복 방지 적용)
     @PostMapping("/receive")
     public ResponseEntity<String> receiveLocation(@RequestBody GpsLocationRequest request) {
         GpsLocation location = new GpsLocation();
@@ -80,38 +79,48 @@ public class GpsController {
         location.setLat(request.getLat());
         location.setLng(request.getLng());
         location.setTimestamp(System.currentTimeMillis());
-        gpsLocationRepository.save(location);
+
+        gpsService.saveGpsLocation(location);
         return ResponseEntity.ok("위치 정보가 저장되었습니다.");
     }
 
     // ✅ 단순 전체 위치 데이터
     @GetMapping("/latest")
     public List<GpsLocation> getLatestLocations() {
-        return gpsLocationRepository.findAll();
+        return gpsService.getAllWithVehicleData().stream()
+                .map(dto -> {
+                    GpsLocation g = new GpsLocation();
+                    g.setLat(dto.getLat());
+                    g.setLng(dto.getLng());
+                    return g;
+                }).toList();
     }
 
     // ✅ vehicleId 기준 최신 GPS + 차량 정보 병합 데이터
     @GetMapping("/all")
     public ResponseEntity<List<Map<String, Object>>> getAllGpsWithVehicleInfo() {
-        List<GpsLocation> allGps = gpsLocationRepository.findAllByOrderByTimestampDesc();
-        Map<Long, GpsLocation> latestGpsMap = new HashMap<>();
+        List<GpsLocation> allGps = gpsService.getAllWithVehicleData().stream()
+                .map(dto -> {
+                    GpsLocation g = new GpsLocation();
+                    g.setVehicleId(dto.getVehicleId());
+                    g.setLat(dto.getLat());
+                    g.setLng(dto.getLng());
+                    g.setTimestamp(dto.getTimestamp());
+                    return g;
+                }).toList();
 
+        Map<Long, GpsLocation> latestGpsMap = new HashMap<>();
         for (GpsLocation gps : allGps) {
-            Long vehicleId = gps.getVehicleId();
-            if (!latestGpsMap.containsKey(vehicleId)) {
-                latestGpsMap.put(vehicleId, gps); // 처음 본 vehicleId의 최신 데이터
-            }
+            latestGpsMap.putIfAbsent(gps.getVehicleId(), gps);
         }
 
         List<Map<String, Object>> result = new ArrayList<>();
-
         for (Map.Entry<Long, GpsLocation> entry : latestGpsMap.entrySet()) {
             Long vehicleId = entry.getKey();
             GpsLocation gps = entry.getValue();
-
             Optional<Vehicle> vehicleOpt = vehicleRepository.findById(vehicleId);
-            if (vehicleOpt.isPresent()) {
-                Vehicle vehicle = vehicleOpt.get();
+
+            vehicleOpt.ifPresent(vehicle -> {
                 Map<String, Object> data = new HashMap<>();
                 data.put("id", vehicle.getId());
                 data.put("lat", gps.getLat());
@@ -127,7 +136,7 @@ public class GpsController {
                 data.put("personnel", vehicle.getPersonnel());
                 data.put("gathering", vehicle.getGathering());
                 result.add(data);
-            }
+            });
         }
 
         return ResponseEntity.ok(result);

@@ -1,7 +1,14 @@
 package com.example.demo.model;
 
+import java.time.LocalDateTime;
+
+import org.springframework.data.annotation.LastModifiedDate;
+
 import com.fasterxml.jackson.annotation.JsonProperty;
+
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -12,6 +19,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @Entity
+// @EntityListeners(org.springframework.data.jpa.domain.support.AuditingEntityListener.class)
 @Table(name = "vehicles")
 public class Vehicle {
 
@@ -51,4 +59,8 @@ public class Vehicle {
 
     @JsonProperty("confirm")
     private String confirm;
+
+    // @LastModifiedDate
+    // @Column(name = "updated_at")
+    // private LocalDateTime updatedAt;
 }

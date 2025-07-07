@@ -133,7 +133,7 @@ function ActivityMapPage() {
     });
 
     // ✅ 내 위치 마커
-    if ("geolocation" in navigator) {
+    if ("geolocation" in navigator && gpsData.length > 0) {
       navigator.geolocation.getCurrentPosition((position) => {
         const { latitude, longitude } = position.coords;
         const locPosition = new window.kakao.maps.LatLng(latitude, longitude);

@@ -21,6 +21,8 @@ function GpsReceivePage() {
         (position) => {
           const { latitude, longitude } = position.coords;
 
+          sentRef.current = true; // ✅ 먼저 막아줌
+
           const data = {
             vehicleId: parseInt(vehicleId),
             lat: latitude,
@@ -31,8 +33,6 @@ function GpsReceivePage() {
             .post("http://localhost:8080/gps/receive", data)
             .then(() => alert("📍 위치 정보가 전송되었습니다!"))
             .catch(() => alert("🚨 위치 전송 실패!"));
-
-          sentRef.current = true; // ✅ 한 번만 실행
         },
         (error) => {
           console.error("위치 정보 획득 실패", error);
