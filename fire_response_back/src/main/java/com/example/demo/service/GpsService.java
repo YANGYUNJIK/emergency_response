@@ -8,7 +8,9 @@ import com.example.demo.repository.VehicleRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class GpsService {
@@ -58,4 +60,38 @@ public class GpsService {
 
         return result;
     }
+
+    public List<GpsWithVehicleDTO> getLatestGpsPerVehicle() {
+        List<GpsLocation> allGps = gpsLocationRepository.findAllByOrderByTimestampDesc();
+        // ✅ 최신 순으로 정렬된 상태에서 vehicleId 기준 중복 제거
+        Map<Long, GpsLocation> latestMap = new HashMap<>();
+        for (GpsLocation gps : allGps) {
+            if (!latestMap.containsKey(gps.getVehicleId())) {
+                latestMap.put(gps.getVehicleId(), gps);
+            }
+        }
+
+        List<GpsWithVehicleDTO> result = new ArrayList<>();
+        for (GpsLocation gps : latestMap.values()) {
+            Vehicle vehicle = vehicleRepository.findById(gps.getVehicleId()).orElse(null);
+            GpsWithVehicleDTO dto = new GpsWithVehicleDTO();
+            dto.setVehicleId(gps.getVehicleId());
+            dto.setLat(gps.getLat());
+            dto.setLng(gps.getLng());
+            dto.setTimestamp(gps.getTimestamp());
+
+            if (vehicle != null) {
+                dto.setCallSign(vehicle.getCallSign());
+                dto.setVehicleType(vehicle.getVehicleType());
+                dto.setStation(vehicle.getStation());
+                dto.setProvince(vehicle.getProvince());
+                dto.setStatus(vehicle.getStatus());
+            }
+
+            result.add(dto);
+        }
+
+        return result;
+    }
+
 }

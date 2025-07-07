@@ -4,7 +4,6 @@ public class GpsLocationRequest {
     private Long vehicleId;
     private double lat;
     private double lng;
-    private long timestamp; // ✅ 추가된 필드
 
     public Long getVehicleId() {
         return vehicleId;
@@ -28,13 +27,5 @@ public class GpsLocationRequest {
 
     public void setLng(double lng) {
         this.lng = lng;
-    }
-
-    public long getTimestamp() {
-        return timestamp;
-    }
-
-    public void setTimestamp(long timestamp) {
-        this.timestamp = timestamp;
     }
 }

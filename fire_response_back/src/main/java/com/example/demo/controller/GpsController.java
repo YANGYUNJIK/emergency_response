@@ -99,27 +99,31 @@ public class GpsController {
     // ✅ vehicleId 기준 최신 GPS + 차량 정보 병합 데이터
     @GetMapping("/all")
     public ResponseEntity<List<Map<String, Object>>> getAllGpsWithVehicleInfo() {
+        // ✅ 1. GpsWithVehicleDTO 리스트를 timestamp 내림차순 정렬
         List<GpsLocation> allGps = gpsService.getAllWithVehicleData().stream()
-                .map(dto -> {
-                    GpsLocation g = new GpsLocation();
-                    g.setVehicleId(dto.getVehicleId());
-                    g.setLat(dto.getLat());
-                    g.setLng(dto.getLng());
-                    g.setTimestamp(dto.getTimestamp());
-                    return g;
-                }).toList();
+            .sorted((a, b) -> Long.compare(b.getTimestamp(), a.getTimestamp()))
+            .map(dto -> {
+                GpsLocation g = new GpsLocation();
+                g.setVehicleId(dto.getVehicleId());
+                g.setLat(dto.getLat());
+                g.setLng(dto.getLng());
+                g.setTimestamp(dto.getTimestamp());
+                return g;
+            }).toList();
 
+        // ✅ 2. 가장 최신 vehicleId 별 GPS만 map에 저장
         Map<Long, GpsLocation> latestGpsMap = new HashMap<>();
         for (GpsLocation gps : allGps) {
-            latestGpsMap.putIfAbsent(gps.getVehicleId(), gps);
+            latestGpsMap.putIfAbsent(gps.getVehicleId(), gps); // 최신 순이므로 처음 들어온 것이 최신!
         }
 
+        // ✅ 3. 차량 정보와 병합
         List<Map<String, Object>> result = new ArrayList<>();
         for (Map.Entry<Long, GpsLocation> entry : latestGpsMap.entrySet()) {
             Long vehicleId = entry.getKey();
             GpsLocation gps = entry.getValue();
-            Optional<Vehicle> vehicleOpt = vehicleRepository.findById(vehicleId);
 
+            Optional<Vehicle> vehicleOpt = vehicleRepository.findById(vehicleId);
             vehicleOpt.ifPresent(vehicle -> {
                 Map<String, Object> data = new HashMap<>();
                 data.put("id", vehicle.getId());
@@ -135,10 +139,12 @@ public class GpsController {
                 data.put("status", vehicle.getStatus());
                 data.put("personnel", vehicle.getPersonnel());
                 data.put("gathering", vehicle.getGathering());
+                data.put("timestamp", gps.getTimestamp()); // (옵션) timestamp 포함
                 result.add(data);
             });
         }
 
         return ResponseEntity.ok(result);
     }
+
 }
